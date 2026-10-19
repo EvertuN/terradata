@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TerraData — Agregador de Cidades Inteligente</title>
+  <meta name="description" content="Explore cidades do mundo com dados em tempo real: clima, previsão de 7 dias, qualidade do ar, atrações históricas e cidades vizinhas.">
+
+  <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Leaflet.js CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+
+  <!-- App Stylesheet -->
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- =========================================================================
+       Site Header / Navigation
+       ========================================================================= -->
+  <header class="site-header">
+    <div class="container header-inner">
+      <!-- Brand Logo -->
+      <a href="#" class="brand-logo" id="brand-logo" title="TerraData - Início">
+        <div class="brand-icon">
+          <i data-lucide="compass"></i>
+        </div>
+        <div>
+          <span class="brand-title">TerraData</span>
+          <span class="brand-badge">Hub</span>
+        </div>
+      </a>
+
+      <!-- Smart Search Box & Autocomplete -->
+      <div class="search-wrapper">
+        <div class="search-input-box">
+          <span class="search-icon-left">
+            <i data-lucide="search" style="width: 18px; height: 18px;"></i>
+          </span>
+          <input 
+            type="text" 
+            id="city-search-input" 
+            class="search-input" 
+            placeholder="Buscar qualquer cidade (ex: Brasília, Tóquio, Roma, Paris)..." 
+            autocomplete="off"
+            spellcheck="false"
+          >
+          <button id="search-clear" class="search-clear-btn" title="Limpar busca">
+            <i data-lucide="x" style="width: 16px; height: 16px;"></i>
+          </button>
+          <div id="search-loader" class="search-loader"></div>
+        </div>
+        <!-- Autocomplete Suggestions Dropdown -->
+        <div id="autocomplete-dropdown" class="autocomplete-dropdown"></div>
+      </div>
+
+      <!-- Header Actions -->
+      <div class="header-actions">
+        <!-- GPS "Minha Localização" -->
+        <button id="btn-gps" class="btn-gps" title="Obter dados da sua localização via GPS">
+          <span class="pulse-indicator"></span>
+          <i data-lucide="crosshair" style="width: 16px; height: 16px;"></i>
+          <span>GPS</span>
+        </button>
+
+        <!-- Favorites Modal Trigger -->
+        <button id="btn-favorites-toggle" class="btn-icon-action" title="Cidades Favoritas">
+          <i data-lucide="heart" style="width: 18px; height: 18px;"></i>
+          <span id="fav-count-badge" class="badge-count" style="display: none;">0</span>
+        </button>
+
+        <!-- Unit Switcher (°C / °F) -->
+        <button id="btn-unit-toggle" class="btn-icon-action unit-switch-btn" title="Alternar Unidade (°C / °F)">
+          °C
+        </button>
+
+        <!-- Theme Toggle (Dark / Light) -->
+        <button id="btn-theme-toggle" class="btn-icon-action" title="Alternar Tema Claro / Escuro">
+          <i id="theme-icon" data-lucide="sun" style="width: 18px; height: 18px;"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- =========================================================================
+       Quick Cities Pills Bar
+       ========================================================================= -->
+  <div class="container quick-pills-bar">
+    <div class="quick-pills-inner" id="quick-pills-container">
+      <span class="pills-label">
+        <i data-lucide="sparkles" style="width: 14px; height: 14px; color: var(--accent-amber);"></i>
+        Em Destaque:
+      </span>
+      <button class="city-pill active" data-city="Brasília" data-lat="-15.7975" data-lon="-47.8919" data-country="Brasil" data-code="br">🇧🇷 Brasília</button>
+      <button class="city-pill" data-city="São Paulo" data-lat="-23.5475" data-lon="-46.6361" data-country="Brasil" data-code="br">🇧🇷 São Paulo</button>
+      <button class="city-pill" data-city="Rio de Janeiro" data-lat="-22.9064" data-lon="-43.1822" data-country="Brasil" data-code="br">🇧🇷 Rio de Janeiro</button>
+      <button class="city-pill" data-city="Salvador" data-lat="-12.9711" data-lon="-38.5108" data-country="Brasil" data-code="br">🇧🇷 Salvador</button>
+      <button class="city-pill" data-city="Lisboa" data-lat="38.7167" data-lon="-9.1333" data-country="Portugal" data-code="pt">🇵🇹 Lisboa</button>
+      <button class="city-pill" data-city="Paris" data-lat="48.8534" data-lon="2.3488" data-country="França" data-code="fr">🇫🇷 Paris</button>
+      <button class="city-pill" data-city="Tóquio" data-lat="35.6895" data-lon="139.6917" data-country="Japão" data-code="jp">🇯🇵 Tóquio</button>
+      <button class="city-pill" data-city="Nova York" data-lat="40.7143" data-lon="-74.006" data-country="Estados Unidos" data-code="us">🇺🇸 Nova York</button>
+      <button class="city-pill" data-city="Londres" data-lat="51.5085" data-lon="-0.1257" data-country="Reino Unido" data-code="gb">🇬🇧 Londres</button>
+      <button class="city-pill" data-city="Roma" data-lat="41.8919" data-lon="12.5113" data-country="Itália" data-code="it">🇮🇹 Roma</button>
+    </div>
+  </div>
+
+  <main class="container">
+    <!-- =======================================================================
+         Hero City Banner
+         ======================================================================= -->
+    <section class="hero-banner" id="hero-banner">
+      <img id="hero-bg" class="hero-bg-media" src="https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1800&q=80" alt="Capa da Cidade">
+      <div class="hero-overlay"></div>
+
+      <div class="hero-content">
+        <div class="hero-header-row">
+          <div class="hero-title-area">
+            <div class="hero-country-badge">
+              <span id="hero-flag">🇧🇷</span>
+              <span id="hero-country">Brasil</span>
+              <span id="hero-admin" style="opacity: 0.75;">• Distrito Federal</span>
+            </div>
+            <h1 class="hero-city-name" id="hero-city-name">Brasília</h1>
+            <p class="hero-city-subtitle" id="hero-city-sub">Capital Federal do Brasil • Centro-Oeste</p>
+          </div>
+
+          <!-- Digital Clock in Local Timezone -->
+          <div class="hero-clock-box">
+            <span class="clock-live-indicator">
+              <span class="pulse-indicator"></span>
+              Horário Local
+            </span>
+            <div class="hero-digital-clock" id="hero-clock">--:--:--</div>
+            <div class="hero-local-date" id="hero-date">Carregando fuso...</div>
+          </div>
+        </div>
+
+        <!-- Badges Grid in Hero -->
+        <div class="hero-badges-grid">
+          <!-- Elevation -->
+          <div class="hero-badge-item">
+            <i data-lucide="mountain" style="width: 16px; height: 16px; color: var(--accent-amber);"></i>
+            <div>
+              <span class="badge-label">Altitude:</span>
+              <span class="badge-value" id="hero-elevation">1.172 m</span>
+            </div>
+          </div>
+
+          <!-- Population -->
+          <div class="hero-badge-item">
+            <i data-lucide="users" style="width: 16px; height: 16px; color: var(--accent-emerald);"></i>
+            <div>
+              <span class="badge-label">População:</span>
+              <span class="badge-value" id="hero-population">3.055.149 hab</span>
+            </div>
+          </div>
+
+          <!-- Timezone -->
+          <div class="hero-badge-item">
+            <i data-lucide="clock" style="width: 16px; height: 16px; color: var(--primary);"></i>
+            <div>
+              <span class="badge-label">Fuso:</span>
+              <span class="badge-value" id="hero-timezone">America/Sao_Paulo</span>
+            </div>
+          </div>
+
+          <!-- Coordinates with Copy -->
+          <div class="hero-badge-item">
+            <i data-lucide="map-pin" style="width: 16px; height: 16px; color: var(--accent-violet);"></i>
+            <div>
+              <span class="badge-label">Coord:</span>
+              <span class="badge-value" id="hero-coords">-15.7975, -47.8919</span>
+            </div>
+            <button id="btn-copy-coords" class="btn-coord-copy" title="Copiar coordenadas">
+              <i data-lucide="copy" style="width: 14px; height: 14px;"></i>
+            </button>
+          </div>
+
+          <!-- Favorite Toggle Button on Hero -->
+          <button id="btn-hero-fav" class="btn-hero-fav" title="Adicionar aos Favoritos">
+            <i data-lucide="heart" style="width: 16px; height: 16px;"></i>
+            <span id="hero-fav-label">Salvar Cidade</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- =======================================================================
+         Navigation Tabs
+         ======================================================================= -->
+    <nav class="tabs-navigation">
+      <div class="tabs-list" role="tablist">
+        <button class="tab-btn active" data-tab="tab-overview" role="tab">
+          <i data-lucide="info" style="width: 18px; height: 18px;"></i>
+          <span>Visão Geral</span>
+        </button>
+        <button class="tab-btn" data-tab="tab-weather" role="tab">
+          <i data-lucide="cloud-sun" style="width: 18px; height: 18px;"></i>
+          <span>Clima & Previsão</span>
+        </button>
+        <button class="tab-btn" data-tab="tab-air" role="tab">
+          <i data-lucide="wind" style="width: 18px; height: 18px;"></i>
+          <span>Qualidade do Ar</span>
+        </button>
+        <button class="tab-btn" data-tab="tab-map" role="tab">
+          <i data-lucide="map" style="width: 18px; height: 18px;"></i>
+          <span>Mapa Interativo</span>
+        </button>
+        <button class="tab-btn" data-tab="tab-pois" role="tab">
+          <i data-lucide="landmark" style="width: 18px; height: 18px;"></i>
+          <span>Atrações Locais</span>
+        </button>
+        <button class="tab-btn" data-tab="tab-nearby" role="tab">
+          <i data-lucide="navigation-2" style="width: 18px; height: 18px;"></i>
+          <span>Cidades Vizinhas</span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- =======================================================================
+         Tab Content Panels
+         ======================================================================= -->
+    <div class="tab-content-container">
+
+      <!-- ===================================================================
+           TAB 1: Visão Geral (Overview)
+           =================================================================== -->
+      <section id="tab-overview" class="tab-pane active">
+        <div class="grid-cards">
+          <!-- Wikipedia Overview Card -->
+          <div class="card wiki-overview-card">
+            <div class="card-title-row">
+              <h2 class="card-title">
+                <i data-lucide="book-open" style="color: var(--primary);"></i>
+                Sobre a Metrópole (Wikipédia)
+              </h2>
+              <a id="overview-wiki-link" href="#" target="_blank" rel="noopener noreferrer" class="card-action-link">
+                Ler artigo completo
+                <i data-lucide="external-link" style="width: 14px; height: 14px;"></i>
+              </a>
+            </div>
+
+            <div class="wiki-content-wrapper">
+              <div class="wiki-image-box">
+                <img id="overview-wiki-img" src="" alt="Foto da Cidade" onerror="this.src='https://images.unsplash.com/photo-1477959858617-67f30bc75b82?auto=format&fit=crop&w=600&q=80'">
+              </div>
+              <div class="wiki-text-box">
+                <p id="overview-wiki-text">Carregando dados históricos e culturais da cidade...</p>
+                <div style="margin-top: 1rem;">
+                  <span style="font-size: 0.8rem; color: var(--text-dim); display: flex; align-items: center; gap: 0.4rem;">
+                    <i data-lucide="shield-check" style="width: 14px; height: 14px; color: var(--accent-emerald);"></i>
+                    Fonte oficial: Wikipedia REST API v1
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Stats Card -->
+          <div class="card quick-stats-card">
+            <div class="card-title-row">
+              <h2 class="card-title">
+                <i data-lucide="activity" style="color: var(--accent-emerald);"></i>
+                Fatos Rápidos
+              </h2>
+            </div>
+
+            <div class="stats-vertical-list">
+              <div class="stat-item">
+                <div class="stat-item-left">
+                  <i data-lucide="globe" style="width: 16px; height: 16px;"></i>
+                  <span>País / Código</span>
+                </div>
+                <div class="stat-item-val" id="stat-country">Brasil (BR)</div>
+              </div>
+
+              <div class="stat-item">
+                <div class="stat-item-left">
+                  <i data-lucide="map" style="width: 16px; height: 16px;"></i>
+                  <span>Estado / Região</span>
+                </div>
+                <div class="stat-item-val" id="stat-region">Distrito Federal</div>
+              </div>
+
+              <div class="stat-item">
+                <div class="stat-item-left">
+                  <i data-lucide="users" style="width: 16px; height: 16px;"></i>
+                  <span>População Estimada</span>
+                </div>
+                <div class="stat-item-val" id="stat-pop">3.055.149</div>
+              </div>
+
+              <div class="stat-item">
+                <div class="stat-item-left">
+                  <i data-lucide="mountain" style="width: 16px; height: 16px;"></i>
+                  <span>Elevação Média</span>
+                </div>
+                <div class="stat-item-val" id="stat-elevation">1.172 m</div>
+              </div>
+
+              <div class="stat-item">
+                <div class="stat-item-left">
+                  <i data-lucide="compass" style="width: 16px; height: 16px;"></i>
+                  <span>Coordenadas GPS</span>
+                </div>
+                <div class="stat-item-val" id="stat-coords" style="font-family: var(--font-mono); font-size: 0.8rem;">-15.7975, -47.8919</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Overview Weather Snippet -->
+          <div class="card overview-weather-snippet">
+            <div class="card-title-row">
+              <h2 class="card-title">
+                <i data-lucide="sun" style="color: var(--accent-amber);"></i>
+                Clima em Tempo Real
+              </h2>
+              <button class="card-action-link" style="background:none;border:none;cursor:pointer;" onclick="document.querySelector('[data-tab=\'tab-weather\']').click()">
+                Ver Previsão 7 Dias →
+              </button>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0;">
+              <div>
+                <div style="font-size: 3rem; font-weight: 800; line-height: 1;" id="overview-temp">--°</div>
+                <div style="font-size: 1rem; color: var(--primary); font-weight: 600; margin-top: 0.25rem;" id="overview-condition">Carregando...</div>
+                <div style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.2rem;" id="overview-feels">Sensação de --°</div>
+              </div>
+              <div id="overview-weather-icon" style="width: 70px; height: 70px; display: flex; align-items: center; justify-content: center;">
+                <i data-lucide="cloud-sun" style="width: 60px; height: 60px; color: var(--accent-amber);"></i>
+              </div>
+            </div>
+          </div>
+
+          <!-- Overview Air Snippet -->
+          <div class="card overview-air-snippet">
+            <div class="card-title-row">
+              <h2 class="card-title">
+                <i data-lucide="wind" style="color: var(--accent-emerald);"></i>
+                Índice de Qualidade do Ar
+              </h2>
+              <button class="card-action-link" style="background:none;border:none;cursor:pointer;" onclick="document.querySelector('[data-tab=\'tab-air\']').click()">
+                Ver Detalhes do Ar →
+              </button>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0;">
+              <div>
+                <div style="font-size: 2.5rem; font-weight: 800; line-height: 1;" id="overview-aqi-val">--</div>
+                <div id="overview-aqi-status" style="font-size: 1rem; color: var(--accent-emerald); font-weight: 700; margin-top: 0.25rem;">Qualidade Boa</div>
+                <div style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.2rem;">Índice Europeu EAQI</div>
+              </div>
+              <div style="text-align: right; max-width: 220px; font-size: 0.825rem; color: var(--text-muted);">
+                Partículas finas (PM2.5) dentro dos parâmetros normais de saúde pública.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================================================================
+           TAB 2: Clima & Previsão (Weather)
+           =================================================================== -->
+      <section id="tab-weather" class="tab-pane">
+        <div class="grid-cards">
+          <!-- Main Hero Weather Card -->
+          <div class="card current-weather-hero">
+            <div class="weather-hero-temp-block">
+              <div class="weather-hero-icon" id="weather-hero-icon">
+                <i data-lucide="sun" style="color: var(--accent-amber);"></i>
+              </div>
+              <div>
+                <div class="weather-hero-degrees" id="weather-hero-degrees">--°C</div>
+                <div class="weather-hero-desc" id="weather-hero-desc">Céu Limpo</div>
+              </div>
+            </div>
+
+            <div class="weather-hero-details-row">
+              <div class="weather-subdetail">
+                <div class="sub-label">Sensação</div>
+                <div class="sub-value" id="weather-sub-feels">--°</div>
+              </div>
+              <div class="weather-subdetail">
+                <div class="sub-label">Máx / Mín Hoje</div>
+                <div class="sub-value" id="weather-sub-minmax">--° / --°</div>
+              </div>
+              <div class="weather-subdetail">
+                <div class="sub-label">Chuva Hoje</div>
+                <div class="sub-value" id="weather-sub-precip">0 mm</div>
+              </div>
+              <div class="weather-subdetail">
+                <button id="btn-open-wttr" class="btn-gps" style="background: rgba(255,255,255,0.08); color: var(--text-main);" title="Ver no terminal wttr.in">
+                  <i data-lucide="terminal" style="width: 14px; height: 14px;"></i>
+                  <span>wttr.in ASCII</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Meteorological 6 Metrics -->
+          <!-- 1. Sensação -->
+          <div class="card metric-card">
+            <div class="metric-header">
+              <span>Sensação Térmica</span>
+              <i data-lucide="thermometer" class="metric-icon"></i>
+            </div>
+            <div class="metric-value-box">
+              <div class="metric-big-val" id="metric-feels">--°</div>
+              <div class="metric-subtext">Aparente na pele</div>
+            </div>
+          </div>
+
+          <!-- 2. Umidade -->
+          <div class="card metric-card">
+            <div class="metric-header">
+              <span>Umidade Relativa</span>
+              <i data-lucide="droplets" class="metric-icon" style="color: #38bdf8;"></i>
+            </div>
+            <div class="metric-value-box">
+              <div class="metric-big-val" id="metric-humidity">--%</div>
+              <div class="metric-subtext" id="metric-humidity-desc">Normal</div>
+            </div>
+          </div>
+
+          <!-- 3. Vento -->
+          <div class="card metric-card">
+            <div class="metric-header">
+              <span>Vento 10m</span>
+              <i data-lucide="wind" class="metric-icon" style="color: #818cf8;"></i>
+            </div>
+            <div class="metric-value-box">
+              <div class="metric-big-val" id="metric-wind">-- km/h</div>
+              <div class="metric-subtext" id="metric-wind-dir">Direção: --</div>
+            </div>
+          </div>
+
+          <!-- 4. Pressão -->
+          <div class="card metric-card">
+            <div class="metric-header">
+              <span>Pressão Superficial</span>
+              <i data-lucide="gauge" class="metric-icon" style="color: var(--accent-emerald);"></i>
+            </div>
+            <div class="metric-value-box">
+              <div class="metric-big-val" id="metric-pressure">-- hPa</div>
+              <div class="metric-subtext">Barômetro</div>
+            </div>
+          </div>
+
+          <!-- 5. UV Index -->
+          <div class="card metric-card">
+            <div class="metric-header">
+              <span>Índice UV Máximo</span>
+              <i data-lucide="sun-medium" class="metric-icon" style="color: var(--accent-amber);"></i>
+            </div>
+            <div class="metric-value-box">
+              <div class="metric-big-val" id="metric-uv">--</div>
+              <div class="metric-subtext" id="metric-uv-desc">Moderado</div>
+            </div>
+          </div>
+
+          <!-- 6. Nascer & Pôr do Sol -->
+          <div class="card metric-card">
+            <div class="metric-header">
+              <span>Ciclo Solar</span>
+              <i data-lucide="sunset" class="metric-icon" style="color: #f97316;"></i>
+            </div>
+            <div class="metric-value-box">
+              <div class="metric-big-val" id="metric-sun-rise" style="font-size: 1.15rem;">🌅 --:--</div>
+              <div class="metric-subtext" id="metric-sun-set" style="font-size: 1rem; color: var(--text-main); font-weight: 700;">🌇 --:--</div>
+            </div>
+          </div>
+
+          <!-- 24-Hour Forecast Chart -->
+          <div class="card chart-container-card">
+            <div class="card-title-row">
+              <h2 class="card-title">
+                <i data-lucide="line-chart" style="color: var(--primary);"></i>
+                Previsão Hora a Hora (Próximas 24 Horas)
+              </h2>
+              <span style="font-size: 0.8rem; color: var(--text-dim);">
+                Temperatura (°C) & Probabilidade de Chuva (%)
+              </span>
+            </div>
+            <div class="chart-wrapper">
+              <canvas id="hourly-chart-canvas"></canvas>
+            </div>
+          </div>
+
+          <!-- 7-Day Forecast Grid -->
+          <div class="card daily-forecast-container">
+            <div class="card-title-row">
+              <h2 class="card-title">
+                <i data-lucide="calendar" style="color: var(--accent-violet);"></i>
+                Previsão Semanal para 7 Dias
+              </h2>
+              <span style="font-size: 0.8rem; color: var(--text-dim);">
+                Open-Meteo Weather Model
+              </span>
+            </div>
+            <div class="daily-cards-grid" id="daily-cards-container">
+              <!-- Dynamically Populated by js/app.js -->
+            </div>
+          </div>
+
+          <!-- Wttr.in Terminal Preview -->
+          <div class="card wttr-preview-card">
+            <div class="terminal-header">
+              <div class="terminal-dots">
+                <span class="terminal-dot dot-red"></span>
+                <span class="terminal-dot dot-yellow"></span>
+                <span class="terminal-dot dot-green"></span>
+              </div>
+              <div class="terminal-title">wttr.in/weather-terminal</div>
+              <button id="btn-refresh-wttr" style="background:none;border:none;color:#8b949e;cursor:pointer;" title="Recarregar terminal">
+                <i data-lucide="rotate-cw" style="width: 14px; height: 14px;"></i>
+              </button>
+            </div>
+            <pre class="terminal-pre" id="terminal-pre-content">Carregando previsão no formato ASCII do wttr.in...</pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================================================================
+           TAB 3: Qualidade do Ar (Air Quality)
+           =================================================================== -->
+      <section id="tab-air" class="tab-pane">
+        <div class="grid-cards">
+          <!-- Main AQI Gauge Card -->
+          <div class="card aqi-main-card">
+            <div>
+              <div class="card-title-row">
+                <h2 class="card-title">
+                  <i data-lucide="shield-alert" style="color: var(--accent-emerald);"></i>
+                  Índice de Qualidade do Ar (AQI)
+                </h2>
+              </div>
+              <div class="aqi-gauge-wrapper">
+                <div class="aqi-big-circle" id="aqi-big-circle">
+                  <span class="aqi-score" id="aqi-big-score">--</span>
+                  <span class="aqi-type-label">AQI EU</span>
+                </div>
+                <div class="aqi-status-badge" id="aqi-main-badge">Boa</div>
+                <p class="aqi-advice" id="aqi-main-advice">
+                  A qualidade do ar é considerada satisfatória e a poluição atmosférica apresenta pouco ou nenhum risco à saúde.
+                </p>
+              </div>
+            </div>
+
+            <!-- Health recommendations -->
+            <div style="background: var(--bg-surface); padding: 1.15rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle); margin-top: 1rem;">
+              <h4 style="font-size: 0.9rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;">
+                <i data-lucide="heart-pulse" style="width: 16px; height: 16px; color: var(--accent-rose);"></i>
+                Recomendações para Atividades
+              </h4>
+              <ul style="font-size: 0.825rem; color: var(--text-muted); padding-left: 1.25rem; line-height: 1.6;" id="aqi-recommendations-list">
+                <li>Ideal para atividades ao ar livre e exercícios físicos.</li>
+                <li>Ambientes ventilados recomendados.</li>
+                <li>Sem restrições para pessoas sensíveis ou com problemas respiratórios.</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Pollutants Grid Card -->
+          <div class="card aqi-pollutants-card">
+            <div class="card-title-row">
+              <h2 class="card-title">
+                <i data-lucide="layers" style="color: var(--primary);"></i>
+                Concentração de Poluentes Atmosféricos
+              </h2>
+              <span style="font-size: 0.8rem; color: var(--text-dim);">Medições em µg/m³</span>
+            </div>
+
+            <div class="pollutants-grid">
+              <!-- PM2.5 -->
+              <div class="pollutant-box">
+                <div class="pollutant-header">
+                  <span class="pollutant-name">PM2.5 (Partículas Finas)</span>
+                  <span class="pollutant-val" id="val-pm25">--</span>
+                </div>
+                <span style="font-size: 0.75rem; color: var(--text-dim);">Penetram fundo nas vias respiratórias</span>
+                <div class="pollutant-bar-bg">
+                  <div class="pollutant-bar-fill" id="bar-pm25" style="width: 25%;"></div>
+                </div>
+              </div>
+
+              <!-- PM10 -->
+              <div class="pollutant-box">
+                <div class="pollutant-header">
+                  <span class="pollutant-name">PM10 (Partículas Inaláveis)</span>
+                  <span class="pollutant-val" id="val-pm10">--</span>
+                </div>
+                <span style="font-size: 0.75rem; color: var(--text-dim);">Poeira, pólen e fumaça em suspensão</span>
+                <div class="pollutant-bar-bg">
+                  <div class="pollutant-bar-fill" id="bar-pm10" style="width: 30%;"></div>
+                </div>
+              </div>
+
+              <!-- NO2 -->
+              <div class="pollutant-box">
+                <div class="pollutant-header">
+                  <span class="pollutant-name">NO₂ (Dióxido de Nitrogênio)</span>
+                  <span class="pollutant-val" id="val-no2">--</span>
+                </div>
+                <span style="font-size: 0.75rem; color: var(--text-dim);">Emissões veiculares e usinas</span>
+                <div class="pollutant-bar-bg">
+                  <div class="pollutant-bar-fill" id="bar-no2" style="width: 20%;"></div>
+                </div>
+              </div>
+
+              <!-- O3 -->
+              <div class="pollutant-box">
+                <div class="pollutant-header">
+                  <span class="pollutant-name">O₃ (Ozônio Superficial)</span>
+                  <span class="pollutant-val" id="val-o3">--</span>
+                </div>
+                <span style="font-size: 0.75rem; color: var(--text-dim);">Reação da luz solar com óxidos</span>
+                <div class="pollutant-bar-bg">
+                  <div class="pollutant-bar-fill" id="bar-o3" style="width: 45%;"></div>
+                </div>
+              </div>
+
+              <!-- CO -->
+              <div class="pollutant-box" style="grid-column: span 2;">
+                <div class="pollutant-header">
+                  <span class="pollutant-name">CO (Monóxido de Carbono)</span>
+                  <span class="pollutant-val" id="val-co">--</span>
+                </div>
+                <span style="font-size: 0.75rem; color: var(--text-dim);">Gás resultante de queima incompleta</span>
+                <div class="pollutant-bar-bg">
+                  <div class="pollutant-bar-fill" id="bar-co" style="width: 15%;"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Scale Reference -->
+            <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-subtle); display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; justify-content: space-between; font-size: 0.75rem;">
+              <span style="color: var(--text-dim); font-weight: 600;">Escala Europeia AQI:</span>
+              <span style="color: #10b981;">● 0-20 Bom</span>
+              <span style="color: #34d399;">● 20-40 Razoável</span>
+              <span style="color: #f59e0b;">● 40-60 Moderado</span>
+              <span style="color: #f97316;">● 60-80 Ruim</span>
+              <span style="color: #ef4444;">● 80-100 Muito Ruim</span>
+              <span style="color: #7f1d1d;">● 100+ Crítico</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================================================================
+           TAB 4: Mapa Interativo (Leaflet Map)
+           =================================================================== -->
+      <section id="tab-map" class="tab-pane">
+        <div class="card map-full-card">
+          <!-- Map Toolbar -->
+          <div class="map-toolbar">
+            <div class="map-toolbar-left">
+              <span style="font-size: 0.875rem; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 0.4rem;">
+                <i data-lucide="map" style="width: 16px; height: 16px; color: var(--primary);"></i>
+                Camadas do Mapa:
+              </span>
+              <button id="filter-layer-pois" class="map-filter-btn active" data-layer="pois">
+                <span style="color: #f59e0b;">●</span> Atrações Históricas (POIs)
+              </button>
+              <button id="filter-layer-nearby" class="map-filter-btn active" data-layer="nearby">
+                <span style="color: #10b981;">●</span> Cidades Vizinhas
+              </button>
+            </div>
+
+            <div class="map-toolbar-right">
+              <button id="btn-map-fit" class="btn-poi-map" title="Enquadrar todos os marcadores">
+                <i data-lucide="maximize" style="width: 14px; height: 14px;"></i>
+                Enquadrar Todos
+              </button>
+              <button id="btn-map-reset" class="btn-poi-map" title="Voltar para o centro da cidade">
+                <i data-lucide="locate-fixed" style="width: 14px; height: 14px;"></i>
+                Centro da Cidade
+              </button>
+            </div>
+          </div>
+
+          <!-- Leaflet Container -->
+          <div id="leaflet-map" class="map-view-container"></div>
+        </div>
+      </section>
+
+      <!-- ===================================================================
+           TAB 5: Atrações do Local (POIs)
+           =================================================================== -->
+      <section id="tab-pois" class="tab-pane">
+        <div class="grid-cards">
+          <div class="card pois-header-card">
+            <div>
+              <h2 class="card-title">
+                <i data-lucide="landmark" style="color: var(--accent-amber);"></i>
+                Pontos Turísticos & Patrimônio Cultural
+              </h2>
+              <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">
+                Locais históricos, monumentos, museus e atrações em um raio de até 10km (Wikipedia Geosearch).
+              </p>
+            </div>
+            <span class="brand-badge" id="poi-count-badge">0 Atrações Encontradas</span>
+          </div>
+
+          <!-- POIs Cards Grid -->
+          <div class="pois-grid-wrapper" id="pois-grid">
+            <!-- Dynamically populated by js/app.js -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================================================================
+           TAB 6: Cidades Próximas (Nearby Cities)
+           =================================================================== -->
+      <section id="tab-nearby" class="tab-pane">
+        <div class="grid-cards">
+          <div class="card nearby-header-card">
+            <div>
+              <h2 class="card-title">
+                <i data-lucide="compass" style="color: var(--accent-emerald);"></i>
+                Cidades e Municípios Vizinhos
+              </h2>
+              <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">
+                Cidades limítrofes e centros regionais em um raio de até 100km (GeoDB Cities API).
+              </p>
+            </div>
+            <span class="brand-badge" id="nearby-count-badge" style="background: rgba(16,185,129,0.15); color: var(--accent-emerald); border-color: rgba(16,185,129,0.3);">
+              0 Cidades Vizinhas
+            </span>
+          </div>
+
+          <!-- Nearby Cities Grid -->
+          <div class="nearby-grid-wrapper" id="nearby-grid">
+            <!-- Dynamically populated by js/app.js -->
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- =========================================================================
+       Favorites Modal
+       ========================================================================= -->
+  <div id="favorites-modal" class="modal-backdrop">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i data-lucide="heart" style="color: var(--accent-rose);"></i>
+          Cidades Favoritas
+        </div>
+        <button id="btn-close-fav-modal" class="modal-close-btn" title="Fechar modal">
+          <i data-lucide="x" style="width: 20px; height: 20px;"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div id="favorites-list" class="fav-list">
+          <!-- Dynamically populated by js/app.js -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       Terminal wttr.in Full Modal
+       ========================================================================= -->
+  <div id="wttr-modal" class="modal-backdrop">
+    <div class="modal-dialog" style="max-width: 850px;">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i data-lucide="terminal" style="color: var(--primary);"></i>
+          wttr.in Weather Terminal
+        </div>
+        <button id="btn-close-wttr-modal" class="modal-close-btn" title="Fechar terminal">
+          <i data-lucide="x" style="width: 20px; height: 20px;"></i>
+        </button>
+      </div>
+      <div class="modal-body" style="background: #0d1117; padding: 1.5rem;">
+        <pre id="wttr-modal-pre" style="font-family: var(--font-mono); font-size: 0.85rem; color: #58a6ff; overflow-x: auto; white-space: pre; line-height: 1.35;">Carregando visualização ASCII...</pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       Toast Notification Container
+       ========================================================================= -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- =========================================================================
+       Footer
+       ========================================================================= -->
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <div style="display: flex; align-items: center; gap: 0.5rem; font-weight: 700; color: var(--text-main);">
+        <i data-lucide="globe" style="width: 20px; height: 20px; color: var(--primary);"></i>
+        UrbanPulse — City Aggregator Platform
+      </div>
+      <p style="max-width: 650px; line-height: 1.6;">
+        Aplicação construída integrando dados geográficos abertos e confiáveis. Meteorologia em alta precisão, histórico da Wikipédia, cálculo de poluição e navegação cartográfica vetorial.
+      </p>
+      <div class="footer-apis-list">
+        <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer" class="api-badge">
+          <i data-lucide="sun" style="width: 14px; height: 14px;"></i> Open-Meteo Weather & Air
+        </a>
+        <a href="https://www.mediawiki.org/wiki/API:REST_API" target="_blank" rel="noopener noreferrer" class="api-badge">
+          <i data-lucide="book" style="width: 14px; height: 14px;"></i> Wikipedia REST & Geosearch
+        </a>
+        <a href="http://geodb-cities.wirefreethought.com/" target="_blank" rel="noopener noreferrer" class="api-badge">
+          <i data-lucide="compass" style="width: 14px; height: 14px;"></i> GeoDB Cities
+        </a>
+        <a href="https://www.openstreetmap.org/" target="_blank" rel="noopener noreferrer" class="api-badge">
+          <i data-lucide="map-pin" style="width: 14px; height: 14px;"></i> OpenStreetMap & Leaflet
+        </a>
+        <a href="https://wttr.in/" target="_blank" rel="noopener noreferrer" class="api-badge">
+          <i data-lucide="terminal" style="width: 14px; height: 14px;"></i> wttr.in
+        </a>
+      </div>
+      <div style="font-size: 0.775rem; color: var(--text-dim);">
+        UrbanPulse v1.0 • Desenvolvido com padrão de engenharia para Antigravity
+      </div>
+    </div>
+  </footer>
+
+  <!-- =========================================================================
+       Scripts: Leaflet, Chart.js, Lucide Icons & App Modules
+       ========================================================================= -->
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- App Architecture -->
+  <script src="js/api.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

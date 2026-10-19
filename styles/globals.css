@@ -1,0 +1,236 @@
+/* TerraData - Apple Minimalist & Pastel Design System */
+:root {
+  --font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", "Inter", sans-serif;
+  
+  /* Apple Light (Padrão) */
+  --bg-primary: #f5f5f7;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-hover: #fafafa;
+  --bg-subtle: #f0f0f2;
+  --bg-input: #e8e8ed;
+  
+  /* Textos Apple Refinados */
+  --text-primary: #1d1d1f;
+  --text-secondary: #6e6e73;
+  --text-muted: #86868b;
+  
+  /* Bordas Quase Invisíveis */
+  --border-color: rgba(0, 0, 0, 0.05);
+  --border-focus: #0071e3;
+  
+  /* Paleta Pastel Apple */
+  --pastel-blue-bg: #eef5ff;
+  --pastel-blue-text: #0071e3;
+  --pastel-green-bg: #eef9f2;
+  --pastel-green-text: #10b981;
+  --pastel-orange-bg: #fff7ed;
+  --pastel-orange-text: #f97316;
+  --pastel-purple-bg: #f5f3ff;
+  --pastel-purple-text: #8b5cf6;
+  --pastel-rose-bg: #fdf2f4;
+  --pastel-rose-text: #f43f5e;
+  --pastel-yellow-bg: #fefce8;
+  --pastel-yellow-text: #ca8a04;
+  --pastel-teal-bg: #f0fdfa;
+  --pastel-teal-text: #0d9488;
+  
+  /* Sombras Apple Suaves */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.02);
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.035);
+  --shadow-elevated: 0 12px 36px rgba(0, 0, 0, 0.06);
+  --shadow-dropdown: 0 16px 40px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="dark"] {
+  /* Apple Dark (Inspirado no macOS / iOS Dark Mode refinado, sem neon) */
+  --bg-primary: #000000;
+  --bg-secondary: #1c1c1e;
+  --bg-card: #1c1c1e;
+  --bg-card-hover: #2c2c2e;
+  --bg-subtle: #2c2c2e;
+  --bg-input: #2c2c2e;
+  
+  --text-primary: #f5f5f7;
+  --text-secondary: #a1a1a6;
+  --text-muted: #86868b;
+  
+  --border-color: rgba(255, 255, 255, 0.08);
+  --border-focus: #0a84ff;
+  
+  --pastel-blue-bg: rgba(10, 132, 255, 0.15);
+  --pastel-blue-text: #64b5f6;
+  --pastel-green-bg: rgba(48, 209, 88, 0.15);
+  --pastel-green-text: #81c784;
+  --pastel-orange-bg: rgba(255, 159, 10, 0.15);
+  --pastel-orange-text: #ffb74d;
+  --pastel-purple-bg: rgba(191, 90, 242, 0.15);
+  --pastel-purple-text: #ba68c8;
+  --pastel-rose-bg: rgba(255, 55, 95, 0.15);
+  --pastel-rose-text: #f06292;
+  --pastel-yellow-bg: rgba(255, 214, 10, 0.15);
+  --pastel-yellow-text: #fff176;
+  --pastel-teal-bg: rgba(100, 210, 255, 0.15);
+  --pastel-teal-text: #4dd0e1;
+  
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2);
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.35);
+  --shadow-elevated: 0 12px 36px rgba(0, 0, 0, 0.5);
+  --shadow-dropdown: 0 16px 40px rgba(0, 0, 0, 0.6);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html,
+body,
+#__next {
+  width: 100%;
+  min-height: 100%;
+  font-family: var(--font-family);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color 0.2s ease, color 0.2s ease;
+  overflow-x: hidden;
+}
+
+/* Remove completamente o outline preto padrão dos navegadores ao focar em inputs */
+input,
+textarea,
+select,
+button,
+[contenteditable],
+[tabindex] {
+  outline: none !important;
+  outline-width: 0 !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+input:focus,
+input:focus-visible,
+textarea:focus,
+textarea:focus-visible,
+button:focus,
+button:focus-visible {
+  outline: none !important;
+  outline-width: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Scrollbar Sutil e Invisível no Repouso */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 999px;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Animações fluidas */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Pulso Discreto Apple */
+@keyframes applePulse {
+  0% {
+    transform: scale(0.96);
+    box-shadow: 0 0 0 0 rgba(0, 113, 227, 0.4);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 10px rgba(0, 113, 227, 0);
+  }
+  100% {
+    transform: scale(0.96);
+    box-shadow: 0 0 0 0 rgba(0, 113, 227, 0);
+  }
+}
+
+.pulse-marker-ring {
+  animation: applePulse 2.4s infinite cubic-bezier(0.45, 0, 0.55, 1);
+}
+
+/* Leaflet Apple Style */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  border-radius: 24px;
+  background-color: #e5e5ea !important;
+  font-family: var(--font-family) !important;
+  z-index: 10;
+}
+
+.leaflet-popup-content-wrapper {
+  background: #ffffff !important;
+  color: #1d1d1f !important;
+  border-radius: 18px !important;
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.1) !important;
+  padding: 6px !important;
+}
+
+[data-theme="dark"] .leaflet-popup-content-wrapper {
+  background: #2c2c2e !important;
+  color: #f5f5f7 !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5) !important;
+}
+
+.leaflet-popup-tip {
+  background: #ffffff !important;
+}
+
+[data-theme="dark"] .leaflet-popup-tip {
+  background: #2c2c2e !important;
+}
+
+.leaflet-popup-content {
+  margin: 10px 14px !important;
+  line-height: 1.4 !important;
+}
+
+.leaflet-control-zoom {
+  border: none !important;
+  border-radius: 12px !important;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08) !important;
+}
+
+.leaflet-control-zoom a {
+  background-color: #ffffff !important;
+  color: #1d1d1f !important;
+  border-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+[data-theme="dark"] .leaflet-control-zoom a {
+  background-color: #2c2c2e !important;
+  color: #f5f5f7 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
