@@ -70,7 +70,7 @@ export interface CitySummary {
 }
 
 export interface PointOfInterest {
-  pageId: number;
+  pageId: number | string;
   title: string;
   lat: number;
   lon: number;
@@ -79,6 +79,9 @@ export interface PointOfInterest {
   thumbnail: string | null;
   extract: string;
   url: string;
+  rating?: number;
+  reviewsCount?: string;
+  category?: string;
 }
 
 export interface NearbyCity {

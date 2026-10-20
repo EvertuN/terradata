@@ -91,7 +91,7 @@ export const NearbyCitiesSection: React.FC<NearbyCitiesSectionProps> = ({
                 <View style={styles.popRow}>
                   <Users size={12} color="#86868b" />
                   <Text style={[styles.popText, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
-                    {city.population ? `${formatNumberBR(city.population)} hab.` : 'Região próxima'}
+                    {city.population ? `${formatNumberBR(city.population)} hab.` : 'Cidade vizinha'}
                   </Text>
                 </View>
 

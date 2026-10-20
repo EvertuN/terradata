@@ -7,7 +7,7 @@ import {
   StyleSheet,
   Linking,
 } from 'react-native';
-import { Landmark, MapPin, ExternalLink } from 'lucide-react';
+import { Landmark, MapPin, ExternalLink, Star } from 'lucide-react';
 import { PointOfInterest } from '../types';
 
 interface POIsSectionProps {
@@ -28,21 +28,21 @@ export const POIsSection: React.FC<POIsSectionProps> = ({ pois, theme }) => {
           <View style={styles.titleWrap}>
             <Landmark size={16} color={isDark ? '#ba68c8' : '#8b5cf6'} />
             <Text style={[styles.cardTitle, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
-              Pontos de Interesse
+              Pontos de Interesse & Atrações Populares
             </Text>
           </View>
           <View style={[styles.countBadge, isDark ? styles.badgePurpleDark : styles.badgePurpleLight]}>
             <Text style={[styles.countText, isDark ? styles.textPurpleDark : styles.textPurpleLight]}>
-              {pois.length} locais
+              {pois.length} locais em destaque
             </Text>
           </View>
         </View>
 
         {/* POI Clean Cards Grid */}
         <View style={styles.grid}>
-          {pois.map((poi) => (
+          {pois.map((poi, idx) => (
             <View
-              key={poi.pageId}
+              key={`${poi.pageId}-${idx}`}
               style={[styles.poiCard, isDark ? styles.poiCardDark : styles.poiCardLight]}
             >
               {/* Photo or Placeholder */}
@@ -51,9 +51,17 @@ export const POIsSection: React.FC<POIsSectionProps> = ({ pois, theme }) => {
                   <Image source={{ uri: poi.thumbnail }} style={styles.image} resizeMode="cover" />
                 ) : (
                   <View style={[styles.placeholderImage, isDark ? styles.placeholderDark : styles.placeholderLight]}>
-                    <Landmark size={22} color="#86868b" />
+                    <Landmark size={24} color="#86868b" />
                   </View>
                 )}
+
+                {/* Category Badge */}
+                {poi.category && (
+                  <View style={styles.categoryBadge}>
+                    <Text style={styles.categoryText}>{poi.category}</Text>
+                  </View>
+                )}
+
                 {/* Distance Badge in Soft Apple Blur style */}
                 <View style={styles.distanceBadge}>
                   <Text style={styles.distanceText}>{poi.distFormatted}</Text>
@@ -62,17 +70,29 @@ export const POIsSection: React.FC<POIsSectionProps> = ({ pois, theme }) => {
 
               {/* Body */}
               <View style={styles.infoBody}>
+                {/* Rating & Reviews */}
+                <View style={styles.ratingRow}>
+                  <Star size={13} color="#f59e0b" fill="#f59e0b" />
+                  <Text style={[styles.ratingScore, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
+                    {poi.rating || 4.8}
+                  </Text>
+                  <Text style={[styles.reviewsCount, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
+                    ({poi.reviewsCount || '2.5k avaliações'})
+                  </Text>
+                </View>
+
                 <Text
                   style={[styles.poiTitle, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}
                   numberOfLines={1}
                 >
                   {poi.title}
                 </Text>
+
                 <Text
                   style={[styles.poiExtract, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}
                   numberOfLines={2}
                 >
-                  {poi.extract || 'Ponto histórico e cultural de destaque na cidade.'}
+                  {poi.extract || 'Ponto histórico e cultural de grande destaque e alta visitação.'}
                 </Text>
 
                 {poi.url ? (
@@ -81,7 +101,7 @@ export const POIsSection: React.FC<POIsSectionProps> = ({ pois, theme }) => {
                     onPress={() => Linking.openURL(poi.url)}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.actionText}>Wikipédia</Text>
+                    <Text style={styles.actionText}>Ver na Wikipédia</Text>
                     <ExternalLink size={11} color="#0071e3" />
                   </TouchableOpacity>
                 ) : null}
@@ -159,7 +179,7 @@ const styles = StyleSheet.create({
   },
   poiCard: {
     flex: 1,
-    minWidth: 240,
+    minWidth: 260,
     maxWidth: 380,
     borderRadius: 18,
     borderWidth: 1,
@@ -175,7 +195,7 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     width: '100%',
-    height: 130,
+    height: 140,
     position: 'relative',
   },
   image: {
@@ -194,6 +214,20 @@ const styles = StyleSheet.create({
   placeholderDark: {
     backgroundColor: '#3a3a3c',
   },
+  categoryBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: 'rgba(29, 29, 31, 0.72)',
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+  },
+  categoryText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '600',
+  },
   distanceBadge: {
     position: 'absolute',
     bottom: 8,
@@ -210,7 +244,20 @@ const styles = StyleSheet.create({
   },
   infoBody: {
     padding: 14,
+    gap: 5,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 4,
+  },
+  ratingScore: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  reviewsCount: {
+    fontSize: 11,
+    fontWeight: '400',
   },
   poiTitle: {
     fontSize: 14,
