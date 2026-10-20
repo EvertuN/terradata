@@ -101,7 +101,7 @@ export const POIsSection: React.FC<POIsSectionProps> = ({ pois, theme }) => {
                     onPress={() => Linking.openURL(poi.url)}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.actionText}>Ver na Wikipédia</Text>
+                    <Text style={styles.actionText}>Ver detalhes</Text>
                     <ExternalLink size={11} color="#0071e3" />
                   </TouchableOpacity>
                 ) : null}

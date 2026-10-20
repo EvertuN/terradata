@@ -141,8 +141,8 @@ export default function HomePage() {
           ApiService.getWeather(city.latitude, city.longitude),
           ApiService.getAirQuality(city.latitude, city.longitude),
           ApiService.getCitySummary(city.name, city.admin1),
-          ApiService.getNearbyPOIs(city.latitude, city.longitude, 12),
-          ApiService.getNearbyCities(city.latitude, city.longitude, city.name),
+          ApiService.getNearbyPOIs(city.latitude, city.longitude, 12, city.name, city.admin1),
+          ApiService.getNearbyCities(city.latitude, city.longitude, city.name, city.admin1, city.country),
         ]);
 
         if (resWeather.status === 'fulfilled' && resWeather.value) {
