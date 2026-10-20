@@ -1,6 +1,6 @@
 import Document, { Html, Head, Main, NextScript, DocumentContext } from 'next/document';
 import React from 'react';
-import { AppRegistry } from 'react-native';
+const { AppRegistry } = require('react-native-web');
 
 class MyDocument extends Document {
   static async getInitialProps(ctx: DocumentContext) {
