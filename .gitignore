@@ -43,3 +43,8 @@ Thumbs.db
 
 # Server logs / runtime
 server.log
+
+# Browser inspection
+.edge-profile*
+screenshots/
+browser_inspector.js
