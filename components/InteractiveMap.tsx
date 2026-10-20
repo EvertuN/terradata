@@ -43,12 +43,12 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
         // CartoDB Voyager tile layer for Apple Maps look and feel
         const tileLayerUrl = isDark
-          ? 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
-          : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+          ? 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+          : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 
         L.tileLayer(tileLayerUrl, {
           maxZoom: 19,
-          attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+          attribution: '&copy; OpenStreetMap contributors',
         }).addTo(map);
 
         leafletMapRef.current = map;
