@@ -132,6 +132,12 @@ export default function HomePage() {
     []
   );
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).__selectCity = handleSelectCity;
+    }
+  }, [handleSelectCity]);
+
   // Main data fetch orchestrator with Promise.allSettled
   const loadCityData = useCallback(
     async (city: City) => {

@@ -12,14 +12,14 @@ import {
   Navigation,
   Sun,
   Moon,
-  Sparkles,
+  Globe2,
   MapPin,
   X,
   ChevronLeft,
 } from 'lucide-react';
 import { City } from '../types';
 import { ApiService } from '../services/api';
-import { getCountryFlag } from '../services/utils';
+
 
 interface HeaderProps {
   currentCity: City | null;
@@ -114,10 +114,10 @@ export const Header: React.FC<HeaderProps> = ({
             activeOpacity={0.8}
           >
             <View style={[styles.brandIcon, isDark ? styles.brandIconDark : styles.brandIconLight]}>
-              <Sparkles size={16} color={isDark ? '#64b5f6' : '#0071e3'} />
+              <Globe2 size={16} color={isDark ? '#64b5f6' : '#0071e3'} />
             </View>
             <Text style={[styles.brandTitle, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
-              Terra<Text style={styles.brandAccent}>Data</Text>
+              TerraData
             </Text>
           </TouchableOpacity>
         </View>
@@ -195,10 +195,10 @@ export const Header: React.FC<HeaderProps> = ({
                         isDark ? styles.textPrimaryDark : styles.textPrimaryLight,
                       ]}
                     >
-                      {city.name} {getCountryFlag(city.countryCode)}
+                      {city.name}
                     </Text>
                     <Text style={styles.dropdownSubtext}>
-                      {[city.admin1, city.country].filter(Boolean).join(', ')}
+                      {[city.admin1, city.country].filter(Boolean).join(' • ')}
                     </Text>
                   </View>
                 </TouchableOpacity>

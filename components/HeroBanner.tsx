@@ -15,9 +15,10 @@ import {
   ExternalLink,
   Copy,
   Check,
+  MapPin,
 } from 'lucide-react';
 import { City, CitySummary } from '../types';
-import { getCountryFlag, formatNumberBR } from '../services/utils';
+import { formatNumberBR } from '../services/utils';
 
 interface HeroBannerProps {
   city: City;
@@ -81,7 +82,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
           {/* Top Line: Flag & Region Pill */}
           <View style={styles.topPillRow}>
             <View style={[styles.regionPill, isDark ? styles.regionPillDark : styles.regionPillLight]}>
-              <Text style={styles.flagText}>{getCountryFlag(city.countryCode)}</Text>
+              <MapPin size={12} color={isDark ? '#64b5f6' : '#0071e3'} />
               <Text style={[styles.regionText, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
                 {[city.admin1, city.country].filter(Boolean).join(' • ')}
               </Text>
@@ -111,52 +112,57 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
             </Text>
           ) : null}
 
-          {/* Pastel Apple Badges */}
-          <View style={styles.badgesRow}>
-            {/* Population Badge (Soft Blue Pastel) */}
-            <View style={[styles.badge, isDark ? styles.badgeBlueDark : styles.badgeBlueLight]}>
-              <Users size={13} color={isDark ? '#64b5f6' : '#0071e3'} />
-              <Text style={[styles.badgeText, isDark ? styles.badgeTextBlueDark : styles.badgeTextBlueLight]}>
+          {/* Clean Editorial Stats Strip (Anti-AI-Slop: No Pill Soup) */}
+          <View style={styles.statsStrip}>
+            {/* Population */}
+            <View style={styles.statItem}>
+              <Users size={13} color={isDark ? '#93c5fd' : '#2563eb'} />
+              <Text style={[styles.statValue, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
                 {city.population > 0 ? `${formatNumberBR(city.population)} hab.` : 'Metrópole'}
               </Text>
             </View>
 
-            {/* Elevation Badge (Soft Mint Pastel) */}
-            <View style={[styles.badge, isDark ? styles.badgeMintDark : styles.badgeMintLight]}>
-              <Mountain size={13} color={isDark ? '#81c784' : '#10b981'} />
-              <Text style={[styles.badgeText, isDark ? styles.badgeTextMintDark : styles.badgeTextMintLight]}>
+            <Text style={styles.dotSeparator}>•</Text>
+
+            {/* Elevation */}
+            <View style={styles.statItem}>
+              <Mountain size={13} color={isDark ? '#a1a1a6' : '#6e6e73'} />
+              <Text style={[styles.statValue, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
                 {city.elevation ? `${Math.round(city.elevation)} m` : 'Nível do mar'}
               </Text>
             </View>
 
-            {/* Coordinates Badge (Soft Lavender Pastel) with copy */}
+            <Text style={styles.dotSeparator}>•</Text>
+
+            {/* Coordinates with copy */}
             <TouchableOpacity
-              style={[styles.badge, isDark ? styles.badgePurpleDark : styles.badgePurpleLight]}
+              style={styles.statItem}
               onPress={handleCopyCoordinates}
-              activeOpacity={0.7}
+              activeOpacity={0.65}
             >
-              <Compass size={13} color={isDark ? '#ba68c8' : '#8b5cf6'} />
-              <Text style={[styles.badgeText, isDark ? styles.badgeTextPurpleDark : styles.badgeTextPurpleLight]}>
+              <Compass size={13} color={isDark ? '#a1a1a6' : '#6e6e73'} />
+              <Text style={[styles.statValue, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
                 {city.latitude.toFixed(2)}°, {city.longitude.toFixed(2)}°
               </Text>
               {copiedCoords ? (
                 <Check size={12} color="#10b981" />
               ) : (
-                <Copy size={11} color={isDark ? '#a1a1a6' : '#86868b'} />
+                <Copy size={11} color={isDark ? '#71717a' : '#a1a1a6'} />
               )}
             </TouchableOpacity>
 
             {summary?.url ? (
-              <TouchableOpacity
-                style={[styles.badge, isDark ? styles.badgeNeutralDark : styles.badgeNeutralLight]}
-                onPress={() => Linking.openURL(summary.url)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.badgeText, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
-                  Wikipédia
-                </Text>
-                <ExternalLink size={11} color={isDark ? '#a1a1a6' : '#86868b'} />
-              </TouchableOpacity>
+              <>
+                <Text style={styles.dotSeparator}>•</Text>
+                <TouchableOpacity
+                  style={styles.statItem}
+                  onPress={() => Linking.openURL(summary.url)}
+                  activeOpacity={0.65}
+                >
+                  <Text style={styles.linkText}>Wikipédia</Text>
+                  <ExternalLink size={11} color={isDark ? '#64b5f6' : '#0071e3'} />
+                </TouchableOpacity>
+              </>
             ) : null}
           </View>
         </View>
@@ -259,19 +265,31 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     fontWeight: '400',
   },
-  badgesRow: {
+  statsStrip: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    alignItems: 'center',
     gap: 8,
-    marginTop: 2,
+    marginTop: 4,
   },
-  badge: {
+  statItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 11,
-    borderRadius: 14,
+    gap: 5,
+  },
+  statValue: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  dotSeparator: {
+    fontSize: 12,
+    color: '#86868b',
+    opacity: 0.6,
+  },
+  linkText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#0071e3',
   },
   badgeBlueLight: {
     backgroundColor: '#eef5ff',

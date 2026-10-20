@@ -87,6 +87,13 @@ export const WeatherSection: React.FC<WeatherSectionProps> = ({
     }
   };
 
+  // Calculate absolute week extremes for authentic Apple Weather dynamic range bars
+  const allMins = (weather.daily || []).map(d => d.tempMin);
+  const allMaxs = (weather.daily || []).map(d => d.tempMax);
+  const weekMin = allMins.length > 0 ? Math.min(...allMins) : 0;
+  const weekMax = allMaxs.length > 0 ? Math.max(...allMaxs) : 30;
+  const weekRange = Math.max(1, weekMax - weekMin);
+
   return (
     <View style={styles.container}>
       {/* Current Weather Apple Widget */}
@@ -104,9 +111,9 @@ export const WeatherSection: React.FC<WeatherSectionProps> = ({
             </View>
           </View>
 
-          {/* Condition Icon in Pastel Circle */}
-          <View style={[styles.pastelIconWrap, { backgroundColor: isDark ? 'rgba(255, 159, 10, 0.15)' : '#fff7ed' }]}>
-            {getWeatherIcon(currentMeta.icon, 28, isDark ? '#ffb74d' : '#f97316')}
+          {/* Condition Icon in Subtle Circle */}
+          <View style={[styles.pastelIconWrap, isDark ? styles.iconWrapDark : styles.iconWrapLight]}>
+            {getWeatherIcon(currentMeta.icon, 28, isDark ? '#ffb74d' : '#f59e0b')}
           </View>
         </View>
 
@@ -120,54 +127,54 @@ export const WeatherSection: React.FC<WeatherSectionProps> = ({
           </Text>
         </View>
 
-        {/* 4 Metrics with Soft Pastel Icons */}
+        {/* 4 Unified Clean Weather Metrics (Apple Weather Style) */}
         <View style={styles.metricsGrid}>
-          {/* Humidity (Pastel Blue) */}
+          {/* Humidity */}
           <View style={[styles.metricCard, isDark ? styles.metricCardDark : styles.metricCardLight]}>
-            <View style={[styles.metricIconCircle, isDark ? styles.iconBlueDark : styles.iconBlueLight]}>
-              <Droplets size={16} color={isDark ? '#64b5f6' : '#0071e3'} />
+            <View style={[styles.metricIconCircle, isDark ? styles.metricIconCircleDark : styles.metricIconCircleLight]}>
+              <Droplets size={15} color={isDark ? '#93c5fd' : '#2563eb'} />
             </View>
             <View>
-              <Text style={styles.metricLabel}>Umidade</Text>
+              <Text style={[styles.metricLabel, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>Umidade</Text>
               <Text style={[styles.metricVal, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
                 {weather.current.humidity}%
               </Text>
             </View>
           </View>
 
-          {/* Wind (Pastel Purple) */}
+          {/* Wind */}
           <View style={[styles.metricCard, isDark ? styles.metricCardDark : styles.metricCardLight]}>
-            <View style={[styles.metricIconCircle, isDark ? styles.iconPurpleDark : styles.iconPurpleLight]}>
-              <Wind size={16} color={isDark ? '#ba68c8' : '#8b5cf6'} />
+            <View style={[styles.metricIconCircle, isDark ? styles.metricIconCircleDark : styles.metricIconCircleLight]}>
+              <Wind size={15} color={isDark ? '#93c5fd' : '#2563eb'} />
             </View>
             <View>
-              <Text style={styles.metricLabel}>Vento</Text>
+              <Text style={[styles.metricLabel, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>Vento</Text>
               <Text style={[styles.metricVal, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
                 {weather.current.windSpeed} km/h
               </Text>
             </View>
           </View>
 
-          {/* Pressure (Pastel Mint) */}
+          {/* Pressure */}
           <View style={[styles.metricCard, isDark ? styles.metricCardDark : styles.metricCardLight]}>
-            <View style={[styles.metricIconCircle, isDark ? styles.iconMintDark : styles.iconMintLight]}>
-              <Gauge size={16} color={isDark ? '#81c784' : '#10b981'} />
+            <View style={[styles.metricIconCircle, isDark ? styles.metricIconCircleDark : styles.metricIconCircleLight]}>
+              <Gauge size={15} color={isDark ? '#93c5fd' : '#2563eb'} />
             </View>
             <View>
-              <Text style={styles.metricLabel}>Pressão</Text>
+              <Text style={[styles.metricLabel, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>Pressão</Text>
               <Text style={[styles.metricVal, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
                 {weather.current.surfacePressure} hPa
               </Text>
             </View>
           </View>
 
-          {/* Precipitation (Pastel Peach) */}
+          {/* Precipitation */}
           <View style={[styles.metricCard, isDark ? styles.metricCardDark : styles.metricCardLight]}>
-            <View style={[styles.metricIconCircle, isDark ? styles.iconPeachDark : styles.iconPeachLight]}>
-              <Sunrise size={16} color={isDark ? '#ffb74d' : '#f97316'} />
+            <View style={[styles.metricIconCircle, isDark ? styles.metricIconCircleDark : styles.metricIconCircleLight]}>
+              <CloudRain size={15} color={isDark ? '#93c5fd' : '#2563eb'} />
             </View>
             <View>
-              <Text style={styles.metricLabel}>Chuva</Text>
+              <Text style={[styles.metricLabel, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>Chuva</Text>
               <Text style={[styles.metricVal, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
                 {weather.current.precipitation} mm
               </Text>
@@ -208,7 +215,7 @@ export const WeatherSection: React.FC<WeatherSectionProps> = ({
                   {formatHour(time)}
                 </Text>
                 <View style={styles.hourIconWrap}>
-                  {getWeatherIcon(meta.icon, 20, isDark ? '#ffb74d' : '#f97316')}
+                  {getWeatherIcon(meta.icon, 20, isDark ? '#ffb74d' : '#f59e0b')}
                 </View>
                 <Text style={[styles.hourTemp, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
                   {formatTemp(temp, temperatureUnit)}
@@ -224,10 +231,10 @@ export const WeatherSection: React.FC<WeatherSectionProps> = ({
         </ScrollView>
       </View>
 
-      {/* 7-Day Forecast (Apple Weather Style List) */}
+      {/* 7-Day Forecast (Authentic Apple Weather Min-Max Dynamic Range) */}
       <View style={[styles.card, isDark ? styles.cardDark : styles.cardLight]}>
         <View style={styles.cardHeader}>
-          <Calendar size={16} color={isDark ? '#81c784' : '#10b981'} />
+          <Calendar size={16} color={isDark ? '#64b5f6' : '#0071e3'} />
           <Text style={[styles.cardTitle, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
             Previsão para 7 Dias
           </Text>
@@ -236,6 +243,24 @@ export const WeatherSection: React.FC<WeatherSectionProps> = ({
         <View style={styles.dailyTable}>
           {weather.daily.map((day, idx) => {
             const meta = ApiService.getWeatherMeta(day.weatherCode);
+
+            // Proportional calculations relative to week's absolute minimum and maximum
+            const leftPct = Math.max(0, Math.min(88, ((day.tempMin - weekMin) / weekRange) * 100));
+            const widthPct = Math.max(10, Math.min(100 - leftPct, ((day.tempMax - day.tempMin) / weekRange) * 100));
+
+            // Current live temperature indicator dot for "Hoje"
+            const isToday = idx === 0;
+            const currentTemp = weather.current.temperature;
+            const currentDotPct = Math.max(0, Math.min(100, ((currentTemp - weekMin) / weekRange) * 100));
+
+            // Dynamic color tint based on temperature
+            let barColor = '#38bdf8'; // cool
+            if (day.tempMax >= 26) {
+              barColor = '#f97316'; // warm/hot
+            } else if (day.tempMax >= 20) {
+              barColor = '#f59e0b'; // mild
+            }
+
             return (
               <View
                 key={day.date}
@@ -251,7 +276,7 @@ export const WeatherSection: React.FC<WeatherSectionProps> = ({
 
                 {/* Weather Icon */}
                 <View style={styles.dayIconCol}>
-                  {getWeatherIcon(meta.icon, 18, isDark ? '#ffb74d' : '#f97316')}
+                  {getWeatherIcon(meta.icon, 18, isDark ? '#ffb74d' : '#f59e0b')}
                 </View>
 
                 {/* Min Temp */}
@@ -259,9 +284,30 @@ export const WeatherSection: React.FC<WeatherSectionProps> = ({
                   {formatTemp(day.tempMin, temperatureUnit)}
                 </Text>
 
-                {/* Soft Gradient Temp Bar */}
+                {/* Authentic Apple Weather Dynamic Proportional Range Track */}
                 <View style={[styles.tempBarTrack, isDark ? styles.tempBarTrackDark : styles.tempBarTrackLight]}>
-                  <View style={styles.tempBarFill} />
+                  <View
+                    style={[
+                      styles.tempBarFillDynamic,
+                      {
+                        left: `${leftPct}%`,
+                        width: `${widthPct}%`,
+                        backgroundColor: barColor,
+                      } as any,
+                    ]}
+                  />
+                  {/* Current temperature dot indicator on "Hoje" */}
+                  {isToday && (
+                    <View
+                      style={[
+                        styles.liveTempDot,
+                        {
+                          left: `${currentDotPct}%`,
+                          borderColor: isDark ? '#1c1c1e' : '#ffffff',
+                        } as any,
+                      ]}
+                    />
+                  )}
                 </View>
 
                 {/* Max Temp */}
@@ -463,23 +509,46 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     fontSize: 13,
   },
+  iconWrapLight: {
+    backgroundColor: 'rgba(0, 0, 0, 0.03)',
+  },
+  iconWrapDark: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  metricIconCircleLight: {
+    backgroundColor: 'rgba(37, 99, 235, 0.08)',
+  },
+  metricIconCircleDark: {
+    backgroundColor: 'rgba(147, 197, 253, 0.15)',
+  },
   tempBarTrack: {
     flex: 1,
     height: 5,
     borderRadius: 3,
-    overflow: 'hidden',
+    position: 'relative',
   },
   tempBarTrackLight: {
-    backgroundColor: '#f0f0f2',
+    backgroundColor: '#ebebf0',
   },
   tempBarTrackDark: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
   },
-  tempBarFill: {
-    width: '75%',
-    height: '100%',
-    backgroundColor: '#f97316',
+  tempBarFillDynamic: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
     borderRadius: 3,
+  },
+  liveTempDot: {
+    position: 'absolute',
+    top: -2.5,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    zIndex: 2,
+    marginLeft: -5,
   },
   tempMaxText: {
     width: 36,

@@ -10,7 +10,7 @@ import {
 import {
   Search,
   Navigation,
-  Sparkles,
+  Globe2,
   MapPin,
   X,
   ArrowRight,
@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { City } from '../types';
 import { ApiService } from '../services/api';
-import { getCountryFlag } from '../services/utils';
+
 
 interface LandingSearchProps {
   onSelectCity: (city: City) => void;
@@ -105,13 +105,13 @@ export const LandingSearch: React.FC<LandingSearchProps> = ({
         {/* Brand Icon & Heading */}
         <View style={styles.headerBlock}>
           <View style={[styles.brandIconWrap, isDark ? styles.brandIconDark : styles.brandIconLight]}>
-            <Sparkles size={24} color={isDark ? '#64b5f6' : '#0071e3'} />
+            <Globe2 size={24} color={isDark ? '#64b5f6' : '#0071e3'} />
           </View>
           <Text style={[styles.brandTitle, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
-            Terra<Text style={styles.brandAccent}>Data</Text>
+            TerraData
           </Text>
           <Text style={[styles.brandSubtitle, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
-            Agregador de Cidades Inteligente
+            Agregador Geográfico e Meteorológico
           </Text>
         </View>
 
@@ -189,10 +189,10 @@ export const LandingSearch: React.FC<LandingSearchProps> = ({
                         isDark ? styles.textPrimaryDark : styles.textPrimaryLight,
                       ]}
                     >
-                      {city.name} {getCountryFlag(city.countryCode)}
+                      {city.name}
                     </Text>
                     <Text style={[styles.dropdownSubtext, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
-                      {[city.admin1, city.country].filter(Boolean).join(', ')}
+                      {[city.admin1, city.country].filter(Boolean).join(' • ')}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -214,7 +214,7 @@ export const LandingSearch: React.FC<LandingSearchProps> = ({
             <Navigation size={14} color={isDark ? '#64b5f6' : '#0071e3'} />
           )}
           <Text style={[styles.gpsActionText, isDark ? styles.gpsTextDark : styles.gpsTextLight]}>
-            {isLoadingLocation ? 'Localizando...' : 'Usar minha localização atual'}
+            {isLoadingLocation ? 'Localizando...' : 'Minha localização atual'}
           </Text>
         </TouchableOpacity>
 
@@ -230,7 +230,9 @@ export const LandingSearch: React.FC<LandingSearchProps> = ({
                 onPress={() => onSelectCity(cachedCity)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.cacheFlag}>{getCountryFlag(cachedCity.countryCode)}</Text>
+                <View style={[styles.cacheIconWrap, isDark ? styles.cacheIconWrapDark : styles.cacheIconWrapLight]}>
+                  <MapPin size={18} color={isDark ? '#64b5f6' : '#0071e3'} />
+                </View>
                 <View style={styles.cacheInfo}>
                   <Text style={[styles.cacheCityName, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
                     Continuar em {cachedCity.name}
@@ -260,7 +262,7 @@ export const LandingSearch: React.FC<LandingSearchProps> = ({
       {/* Footer */}
       <View style={styles.footer}>
         <Text style={[styles.footerText, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
-          TerraData • Explorador Inteligente de Cidades
+          TerraData • Dados Geográficos e Meteorológicos em Tempo Real
         </Text>
       </View>
     </View>
@@ -520,8 +522,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  cacheFlag: {
-    fontSize: 22,
+  cacheIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cacheIconWrapLight: {
+    backgroundColor: '#eef5ff',
+  },
+  cacheIconWrapDark: {
+    backgroundColor: 'rgba(10, 132, 255, 0.15)',
   },
   cacheInfo: {
     flex: 1,

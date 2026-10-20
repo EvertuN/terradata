@@ -26,14 +26,14 @@ export const POIsSection: React.FC<POIsSectionProps> = ({ pois, theme }) => {
         {/* Section Header */}
         <View style={styles.headerRow}>
           <View style={styles.titleWrap}>
-            <Landmark size={16} color={isDark ? '#ba68c8' : '#8b5cf6'} />
+            <Landmark size={16} color={isDark ? '#64b5f6' : '#0071e3'} />
             <Text style={[styles.cardTitle, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
-              Pontos de Interesse & Atrações Populares
+              Pontos de Interesse
             </Text>
           </View>
-          <View style={[styles.countBadge, isDark ? styles.badgePurpleDark : styles.badgePurpleLight]}>
-            <Text style={[styles.countText, isDark ? styles.textPurpleDark : styles.textPurpleLight]}>
-              {pois.length} locais em destaque
+          <View style={[styles.countBadge, isDark ? styles.countBadgeDark : styles.countBadgeLight]}>
+            <Text style={[styles.countText, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
+              {pois.length} locais
             </Text>
           </View>
         </View>
@@ -138,8 +138,10 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 8,
     marginBottom: 18,
   },
   titleWrap: {
@@ -156,21 +158,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: 12,
   },
-  badgePurpleLight: {
-    backgroundColor: '#f5f3ff',
+  countBadgeLight: {
+    backgroundColor: '#f5f5f7',
   },
-  badgePurpleDark: {
-    backgroundColor: 'rgba(191, 90, 242, 0.15)',
+  countBadgeDark: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   countText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  textPurpleLight: {
-    color: '#8b5cf6',
-  },
-  textPurpleDark: {
-    color: '#ba68c8',
+    fontSize: 12,
+    fontWeight: '500',
   },
   grid: {
     flexDirection: 'row',

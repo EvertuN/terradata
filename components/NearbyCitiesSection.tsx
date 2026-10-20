@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import { Compass, Users, ArrowUpRight } from 'lucide-react';
 import { NearbyCity, City } from '../types';
-import { formatNumberBR, getCountryFlag } from '../services/utils';
+import { formatNumberBR } from '../services/utils';
 
 interface NearbyCitiesSectionProps {
   cities: NearbyCity[];
@@ -71,7 +71,7 @@ export const NearbyCitiesSection: React.FC<NearbyCitiesSectionProps> = ({
                     style={[styles.cityName, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}
                     numberOfLines={1}
                   >
-                    {city.name} {getCountryFlag(city.countryCode)}
+                    {city.name}
                   </Text>
                   <Text style={[styles.cityRegion, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]} numberOfLines={1}>
                     {[city.region, city.country].filter(Boolean).join(', ')}
