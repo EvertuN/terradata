@@ -49,6 +49,8 @@ export const LandingSearch: React.FC<LandingSearchProps> = ({
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
+    let isCurrent = true;
+
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
@@ -64,16 +66,19 @@ export const LandingSearch: React.FC<LandingSearchProps> = ({
     searchTimeoutRef.current = setTimeout(async () => {
       try {
         const results = await ApiService.searchCities(searchQuery);
-        setSuggestions(results);
-        setShowDropdown(true);
+        if (isCurrent) {
+          setSuggestions(results);
+          setShowDropdown(true);
+        }
       } catch (err) {
-        console.error('Search error:', err);
+        if (isCurrent) console.error('Search error:', err);
       } finally {
-        setIsSearching(false);
+        if (isCurrent) setIsSearching(false);
       }
     }, 280);
 
     return () => {
+      isCurrent = false;
       if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     };
   }, [searchQuery]);

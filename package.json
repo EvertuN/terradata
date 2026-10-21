@@ -1,12 +1,13 @@
 {
   "name": "terradata",
   "version": "1.0.0",
-  "description": "TerraData - Agregador de Cidades Inteligente em React Native + Next.js + TypeScript",
+  "description": "TerraData - Agregador Geográfico e Meteorológico em React Native + Next.js + TypeScript",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
-    "start": "next start -p 3000"
+    "start": "npx serve out -l 3000",
+    "preview": "npx serve out"
   },
   "dependencies": {
     "chart.js": "^4.4.6",

@@ -1,4 +1,5 @@
 import { City, WeatherData, AirQualityData, CitySummary, PointOfInterest, NearbyCity } from '../types';
+import { Cache, CACHE_TTL, normalizeCoords } from './cache';
 
 export const ApiService = {
   /**
@@ -6,69 +7,96 @@ export const ApiService = {
    */
   async searchCities(query: string): Promise<City[]> {
     if (!query || query.trim().length < 2) return [];
-    const encoded = encodeURIComponent(query.trim());
-    const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encoded}&count=10&language=pt&format=json`;
+    const normalized = query.trim().toLowerCase();
+    const cacheKey = `search_${normalized}`;
 
-    try {
-      const res = await fetch(url);
-      if (!res.ok) return [];
-      const data = await res.json();
-      if (!data || !data.results) return [];
+    return Cache.fetchWithCache(
+      cacheKey,
+      CACHE_TTL.CITY_SEARCH,
+      async () => {
+        const encoded = encodeURIComponent(query.trim());
+        const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encoded}&count=10&language=pt&format=json`;
 
-      return data.results.map((c: any) => ({
-        id: c.id,
-        name: c.name,
-        latitude: c.latitude,
-        longitude: c.longitude,
-        elevation: c.elevation || 0,
-        country: c.country || '',
-        countryCode: (c.country_code || '').toLowerCase(),
-        admin1: c.admin1 || '',
-        timezone: c.timezone || 'UTC',
-        population: c.population || 0
-      }));
-    } catch (err) {
-      console.error('Error searchCities:', err);
-      return [];
-    }
+        try {
+          const res = await fetch(url);
+          if (!res.ok) return [];
+          const data = await res.json();
+          if (!data || !data.results) return [];
+
+          return data.results.map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            latitude: c.latitude,
+            longitude: c.longitude,
+            elevation: c.elevation || 0,
+            country: c.country || '',
+            countryCode: (c.country_code || '').toLowerCase(),
+            admin1: c.admin1 || '',
+            timezone: c.timezone || 'UTC',
+            population: c.population || 0
+          }));
+        } catch (err) {
+          console.error('Error searchCities:', err);
+          return [];
+        }
+      },
+      (res) => Array.isArray(res) && res.length > 0
+    );
   },
 
   /**
    * Reverse Geocode coordinates using Nominatim OpenStreetMap (APIS.md Line 1389)
    */
   async reverseGeocode(lat: number, lon: number): Promise<City | null> {
-    const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=pt`;
-    try {
-      const res = await fetch(url, {
-        headers: { 'User-Agent': 'TerraDataCityApp/1.0 (https://github.com/EvertuN/terradata)' }
-      });
-      const data = await res.json();
-      const addr = data.address || {};
-      const cityName = addr.city || addr.town || addr.municipality || addr.village || addr.county || 'Local Atual';
+    const coordsKey = normalizeCoords(lat, lon);
+    const cacheKey = `revgeo_${coordsKey}`;
 
-      return {
-        id: Math.round(lat * 1000 + lon * 1000),
-        name: cityName,
-        latitude: lat,
-        longitude: lon,
-        elevation: 0,
-        country: addr.country || '',
-        countryCode: (addr.country_code || '').toLowerCase(),
-        admin1: addr.state || addr.region || '',
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-        population: 0
-      };
-    } catch (err) {
-      console.warn('Reverse geocode error:', err);
-      return null;
-    }
+    return Cache.fetchWithCache(
+      cacheKey,
+      CACHE_TTL.REVERSE_GEO,
+      async () => {
+        const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=pt`;
+        try {
+          const res = await fetch(url, {
+            headers: { 'User-Agent': 'TerraDataCityApp/1.0 (https://github.com/EvertuN/terradata)' }
+          });
+          const data = await res.json();
+          const addr = data.address || {};
+          const cityName = addr.city || addr.town || addr.municipality || addr.village || addr.county || 'Local Atual';
+
+          return {
+            id: Math.round(lat * 1000 + lon * 1000),
+            name: cityName,
+            latitude: lat,
+            longitude: lon,
+            elevation: 0,
+            country: addr.country || '',
+            countryCode: (addr.country_code || '').toLowerCase(),
+            admin1: addr.state || addr.region || '',
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+            population: 0
+          };
+        } catch (err) {
+          console.warn('Reverse geocode error:', err);
+          return null;
+        }
+      },
+      (res) => Boolean(res && res.name)
+    );
   },
 
   /**
    * Get Weather Forecast from Open-Meteo (APIS.md Line 2658)
    */
   async getWeather(lat: number, lon: number): Promise<WeatherData | null> {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m,surface_pressure&hourly=temperature_2m,precipitation_probability,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max&timezone=auto`;
+    const coordsKey = normalizeCoords(lat, lon);
+    const cacheKey = `weather_${coordsKey}`;
+
+    return Cache.fetchWithCache(
+      cacheKey,
+      CACHE_TTL.WEATHER,
+      async () => {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m,surface_pressure&hourly=temperature_2m,precipitation_probability,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max&timezone=auto`;
     try {
       const res = await fetch(url);
       const data = await res.json();
@@ -112,13 +140,23 @@ export const ApiService = {
       console.error('Weather fetch error:', err);
       return null;
     }
+      },
+      (res) => Boolean(res && res.current)
+    );
   },
 
   /**
    * Get Air Quality from Open-Meteo Air Quality API
    */
   async getAirQuality(lat: number, lon: number): Promise<AirQualityData | null> {
-    const url = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=european_aqi,us_aqi,pm10,pm2_5,nitrogen_dioxide,ozone`;
+    const coordsKey = normalizeCoords(lat, lon);
+    const cacheKey = `air_${coordsKey}`;
+
+    return Cache.fetchWithCache(
+      cacheKey,
+      CACHE_TTL.AIR_QUALITY,
+      async () => {
+        const url = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=european_aqi,us_aqi,pm10,pm2_5,nitrogen_dioxide,ozone`;
     try {
       const res = await fetch(url);
       const data = await res.json();
@@ -164,6 +202,9 @@ export const ApiService = {
       console.warn('Air quality error:', err);
       return null;
     }
+      },
+      (res) => Boolean(res && res.status)
+    );
   },
 
   /**
@@ -171,6 +212,13 @@ export const ApiService = {
    * Resolves actual city photography, avoiding flags, coat of arms or maps
    */
   async getCitySummary(cityName: string, fallbackName = ''): Promise<CitySummary> {
+    const clean = (cityName || '').trim().toLowerCase();
+    const cacheKey = `wiki_${clean}`;
+
+    return Cache.fetchWithCache(
+      cacheKey,
+      CACHE_TTL.CITY_SUMMARY,
+      async () => {
     const isBadImage = (url: string | null) => {
       if (!url) return true;
       const lower = url.toLowerCase();
@@ -249,6 +297,9 @@ export const ApiService = {
       bannerImage: bestImage,
       url: `https://pt.wikipedia.org/wiki/${encodeURIComponent(cityName)}`
     };
+      },
+      (res) => Boolean(res && res.title)
+    );
   },
 
   /**
@@ -316,7 +367,15 @@ export const ApiService = {
     cityName = '',
     admin1 = ''
   ): Promise<PointOfInterest[]> {
-    const pois: PointOfInterest[] = [];
+    const coordsKey = normalizeCoords(lat, lon);
+    const cleanName = (cityName || '').trim().toLowerCase();
+    const cacheKey = `pois_${coordsKey}_${cleanName}_${limit}`;
+
+    return Cache.fetchWithCache(
+      cacheKey,
+      CACHE_TTL.POIS,
+      async () => {
+        const pois: PointOfInterest[] = [];
     const seen = new Set<string>();
     const curLower = (cityName || '').toLowerCase();
 
@@ -574,7 +633,10 @@ export const ApiService = {
       }
     }
 
-    return pois;
+        return pois;
+      },
+      (res) => Array.isArray(res) && res.length > 0
+    );
   },
 
   /**
@@ -588,7 +650,15 @@ export const ApiService = {
     admin1 = '',
     country = ''
   ): Promise<NearbyCity[]> {
-    const seen = new Set<string>();
+    const coordsKey = normalizeCoords(lat, lon);
+    const cleanName = (currentCityName || '').trim().toLowerCase();
+    const cacheKey = `nearby_${coordsKey}_${cleanName}`;
+
+    return Cache.fetchWithCache(
+      cacheKey,
+      CACHE_TTL.NEARBY_CITIES,
+      async () => {
+        const seen = new Set<string>();
     const cities: NearbyCity[] = [];
     const curLower = (currentCityName || '').toLowerCase();
 
@@ -737,9 +807,12 @@ export const ApiService = {
       }
     }
 
-    // Sort by distance ascending
-    cities.sort((a, b) => a.distanceKm - b.distanceKm);
-    return cities.slice(0, 8);
+        // Sort by distance ascending
+        cities.sort((a, b) => a.distanceKm - b.distanceKm);
+        return cities.slice(0, 8);
+      },
+      (res) => Array.isArray(res) && res.length > 0
+    );
   },
 
   calculateBearing(lat1: number, lon1: number, lat2: number, lon2: number): string {

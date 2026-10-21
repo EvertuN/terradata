@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -52,6 +52,7 @@ export default function HomePage() {
   const [theme, setTheme] = useState<'dark' | 'light'>('light');
   const [activeTab, setActiveTab] = useState<'all' | 'weather' | 'air' | 'map' | 'pois' | 'nearby'>('all');
   const [toast, setToast] = useState<Omit<ToastProps, 'onClose'> | null>(null);
+  const activeCityIdRef = useRef<number | null>(null);
 
   const showToast = useCallback(
     (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
@@ -138,9 +139,10 @@ export default function HomePage() {
     }
   }, [handleSelectCity]);
 
-  // Main data fetch orchestrator with Promise.allSettled
+  // Main data fetch orchestrator with Promise.allSettled and race-condition guard
   const loadCityData = useCallback(
     async (city: City) => {
+      activeCityIdRef.current = city.id;
       setIsLoading(true);
       try {
         const [resWeather, resAir, resWiki, resPois, resNearby] = await Promise.allSettled([
@@ -150,6 +152,11 @@ export default function HomePage() {
           ApiService.getNearbyPOIs(city.latitude, city.longitude, 12, city.name, city.admin1),
           ApiService.getNearbyCities(city.latitude, city.longitude, city.name, city.admin1, city.country),
         ]);
+
+        // Discard stale data if another city was selected while requests were in flight
+        if (activeCityIdRef.current !== city.id) {
+          return;
+        }
 
         if (resWeather.status === 'fulfilled' && resWeather.value) {
           setWeather(resWeather.value);
@@ -167,10 +174,14 @@ export default function HomePage() {
           setNearbyCities(resNearby.value);
         }
       } catch (err) {
-        console.error('Error loading city data:', err);
-        showToast('Não foi possível sincronizar todos os dados', 'warning');
+        if (activeCityIdRef.current === city.id) {
+          console.error('Error loading city data:', err);
+          showToast('Não foi possível sincronizar todos os dados', 'warning');
+        }
       } finally {
-        setIsLoading(false);
+        if (activeCityIdRef.current === city.id) {
+          setIsLoading(false);
+        }
       }
     },
     [showToast]

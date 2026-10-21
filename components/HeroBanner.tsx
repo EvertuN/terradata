@@ -35,6 +35,13 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
 }) => {
   const [currentTime, setCurrentTime] = useState<string>('');
   const [copiedCoords, setCopiedCoords] = useState(false);
+  const copyTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const updateClock = () => {
@@ -67,7 +74,8 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
       if (onNotify) {
         onNotify(`Coordenadas ${coords} copiadas`, 'success');
       }
-      setTimeout(() => setCopiedCoords(false), 2000);
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+      copyTimeoutRef.current = setTimeout(() => setCopiedCoords(false), 2000);
     }
   };
 

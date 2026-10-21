@@ -22,40 +22,72 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const leafletMapRef = useRef<any>(null);
   const markersLayerRef = useRef<any>(null);
   const [filter, setFilter] = useState<'all' | 'pois' | 'nearby'>('all');
+  const [isMapReady, setIsMapReady] = useState(false);
 
   const isDark = theme === 'dark';
 
+  // 1. Initialize Leaflet Map once and tear it down cleanly on unmount (zero memory leak)
   useEffect(() => {
     if (typeof window === 'undefined' || !mapContainerRef.current) return;
 
     let isMounted = true;
+    let localMap: any = null;
 
     const initMap = async () => {
       const L = (await import('leaflet')).default;
+      if (!isMounted || !mapContainerRef.current) return;
 
-      if (!leafletMapRef.current && mapContainerRef.current) {
-        const map = L.map(mapContainerRef.current, {
-          center: [city.latitude, city.longitude],
-          zoom: 12,
-          zoomControl: true,
-          attributionControl: true,
-        });
-
-        // CartoDB Voyager tile layer for Apple Maps look and feel
-        const tileLayerUrl = isDark
-          ? 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-          : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-
-        L.tileLayer(tileLayerUrl, {
-          maxZoom: 19,
-          attribution: '&copy; OpenStreetMap contributors',
-        }).addTo(map);
-
-        leafletMapRef.current = map;
-        markersLayerRef.current = L.layerGroup().addTo(map);
+      // Clean container if it previously had a leaflet instance attached
+      if ((mapContainerRef.current as any)._leaflet_id) {
+        delete (mapContainerRef.current as any)._leaflet_id;
       }
 
-      if (!isMounted || !leafletMapRef.current) return;
+      const map = L.map(mapContainerRef.current, {
+        center: [city.latitude, city.longitude],
+        zoom: 12,
+        zoomControl: true,
+        attributionControl: true,
+      });
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors',
+      }).addTo(map);
+
+      const markers = L.layerGroup().addTo(map);
+
+      leafletMapRef.current = map;
+      markersLayerRef.current = markers;
+      localMap = map;
+      setIsMapReady(true);
+    };
+
+    initMap();
+
+    return () => {
+      isMounted = false;
+      setIsMapReady(false);
+      if (localMap) {
+        try {
+          localMap.remove();
+        } catch (e) {
+          console.warn('Map cleanup error:', e);
+        }
+      }
+      leafletMapRef.current = null;
+      markersLayerRef.current = null;
+    };
+  }, []);
+
+  // 2. Update markers and view when city, pois, nearbyCities, or filter change
+  useEffect(() => {
+    if (!isMapReady || !leafletMapRef.current || !markersLayerRef.current) return;
+
+    let isMounted = true;
+
+    const updateLayers = async () => {
+      const L = (await import('leaflet')).default;
+      if (!isMounted || !leafletMapRef.current || !markersLayerRef.current) return;
 
       const map = leafletMapRef.current;
       const markersLayer = markersLayerRef.current;
@@ -173,12 +205,12 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       map.setView([city.latitude, city.longitude], 12, { animate: true });
     };
 
-    initMap();
+    updateLayers();
 
     return () => {
       isMounted = false;
     };
-  }, [city, pois, nearbyCities, filter, isDark]);
+  }, [isMapReady, city.latitude, city.longitude, city.name, pois, nearbyCities, filter, onSelectCity]);
 
   return (
     <View style={styles.container}>

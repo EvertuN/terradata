@@ -1,0 +1,11 @@
+# Cloudflare Pages Caching & Security Headers for TerraData
+
+# Next.js immutable static assets (fingerprinted js/css/media)
+/_next/static/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Global default security & performance headers
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: SAMEORIGIN
+  Referrer-Policy: strict-origin-when-cross-origin
