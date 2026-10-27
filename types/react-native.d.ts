@@ -9,6 +9,7 @@ declare module 'react-native' {
   export const Image: React.ForwardRefExoticComponent<any> | React.FC<any>;
   export const ImageBackground: React.ForwardRefExoticComponent<any> | React.FC<any>;
   export const ActivityIndicator: React.ForwardRefExoticComponent<any> | React.FC<any>;
+  export const Modal: React.ForwardRefExoticComponent<any> | React.FC<any>;
 
   export const StyleSheet: {
     create<T extends Record<string, any>>(styles: T): T;

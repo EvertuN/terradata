@@ -33,6 +33,11 @@ import { AirQualitySection } from '../components/AirQualitySection';
 import { POIsSection } from '../components/POIsSection';
 import { NearbyCitiesSection } from '../components/NearbyCitiesSection';
 import { InteractiveMap } from '../components/InteractiveMap';
+import { SavedCitiesCarousel } from '../components/SavedCitiesCarousel';
+import { SmartDayInsights } from '../components/SmartDayInsights';
+import { OneDayItinerary } from '../components/OneDayItinerary';
+import { SnapshotModal } from '../components/SnapshotModal';
+import { FavoritesService } from '../services/favorites';
 import { Toast, ToastProps } from '../components/Toast';
 
 export default function HomePage() {
@@ -52,6 +57,8 @@ export default function HomePage() {
   const [theme, setTheme] = useState<'dark' | 'light'>('light');
   const [activeTab, setActiveTab] = useState<'all' | 'weather' | 'air' | 'map' | 'pois' | 'nearby'>('all');
   const [toast, setToast] = useState<Omit<ToastProps, 'onClose'> | null>(null);
+  const [isSnapshotOpen, setIsSnapshotOpen] = useState<boolean>(false);
+  const [isCityFavorite, setIsCityFavorite] = useState<boolean>(false);
   const activeCityIdRef = useRef<number | null>(null);
 
   const showToast = useCallback(
@@ -60,6 +67,30 @@ export default function HomePage() {
     },
     []
   );
+
+  // Sync favorite state reactively
+  useEffect(() => {
+    const checkFav = () => {
+      if (currentCity?.id) {
+        setIsCityFavorite(FavoritesService.isFavorite(currentCity.id));
+      } else {
+        setIsCityFavorite(false);
+      }
+    };
+    checkFav();
+    const unsubscribe = FavoritesService.subscribe(checkFav);
+    return () => unsubscribe();
+  }, [currentCity]);
+
+  const handleToggleFavorite = useCallback(() => {
+    if (!currentCity) return;
+    const isNowFav = FavoritesService.toggleFavorite(currentCity);
+    setIsCityFavorite(isNowFav);
+    showToast(
+      isNowFav ? `${currentCity.name} salva nas cidades favoritas` : `${currentCity.name} removida dos favoritos`,
+      isNowFav ? 'success' : 'info'
+    );
+  }, [currentCity, showToast]);
 
   // Load cache and preferences from localStorage on mount
   useEffect(() => {
@@ -439,12 +470,25 @@ export default function HomePage() {
           </View>
         )}
 
+        {/* Saved Cities iOS Weather Carousel */}
+        <SavedCitiesCarousel
+          currentCityId={currentCity.id}
+          onSelectCity={(c) => {
+            handleSelectCity(c);
+            showToast(`${c.name} selecionada`, 'info');
+          }}
+          theme={theme}
+        />
+
         {/* Hero Section */}
         <HeroBanner
           city={currentCity}
           summary={citySummary}
           theme={theme}
           onNotify={showToast}
+          isFavorite={isCityFavorite}
+          onToggleFavorite={handleToggleFavorite}
+          onOpenSnapshot={() => setIsSnapshotOpen(true)}
         />
 
         {/* Dynamic Sections Based on Active Tab */}
@@ -462,6 +506,7 @@ export default function HomePage() {
                 theme={theme}
               />
             )}
+            <SmartDayInsights weather={weather} theme={theme} />
           </View>
         )}
 
@@ -489,6 +534,7 @@ export default function HomePage() {
         {(activeTab === 'all' || activeTab === 'pois') && (
           <View style={styles.sectionWrap}>
             <POIsSection pois={pois} theme={theme} />
+            <OneDayItinerary city={currentCity} pois={pois} theme={theme} />
           </View>
         )}
 
@@ -512,6 +558,21 @@ export default function HomePage() {
           </Text>
         </View>
       </ScrollView>
+
+      {/* Snapshot Stories / X 9:16 Modal */}
+      {currentCity && (
+        <SnapshotModal
+          visible={isSnapshotOpen}
+          onClose={() => setIsSnapshotOpen(false)}
+          city={currentCity}
+          weather={weather}
+          airQuality={airQuality}
+          summary={citySummary}
+          temperatureUnit={temperatureUnit}
+          theme={theme}
+          onNotify={showToast}
+        />
+      )}
 
       {/* Floating Apple Capsule Toast */}
       {toast && (

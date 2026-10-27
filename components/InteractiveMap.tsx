@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Map, Layers, Landmark, Compass } from 'lucide-react';
+import { Map, Layers, Landmark, Compass, CloudRain, Play, Pause, Clock } from 'lucide-react';
 import { City, PointOfInterest, NearbyCity } from '../types';
 
 interface InteractiveMapProps {
@@ -21,12 +21,46 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const leafletMapRef = useRef<any>(null);
   const markersLayerRef = useRef<any>(null);
+  const radarTileLayerRef = useRef<any>(null);
+  const radarHostRef = useRef<string>('https://tilecache.rainviewer.com');
+
   const [filter, setFilter] = useState<'all' | 'pois' | 'nearby'>('all');
   const [isMapReady, setIsMapReady] = useState(false);
 
+  // RainViewer Radar State
+  const [isRadarActive, setIsRadarActive] = useState(false);
+  const [radarFrames, setRadarFrames] = useState<Array<{ time: number; path: string }>>([]);
+  const [currentFrameIdx, setCurrentFrameIdx] = useState(0);
+  const [isPlayingRadar, setIsPlayingRadar] = useState(false);
+
   const isDark = theme === 'dark';
 
-  // 1. Initialize Leaflet Map once and tear it down cleanly on unmount (zero memory leak)
+  // 1. Fetch RainViewer public API once on mount (100% free, no API key)
+  useEffect(() => {
+    let isMounted = true;
+    const fetchRadar = async () => {
+      try {
+        const res = await fetch('https://api.rainviewer.com/public/weather-maps.json');
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          radarHostRef.current = data.host || 'https://tilecache.rainviewer.com';
+          const past = data.radar?.past || [];
+          if (past.length > 0) {
+            setRadarFrames(past);
+            setCurrentFrameIdx(past.length - 1); // Default to the newest frame
+          }
+        }
+      } catch (e) {
+        console.warn('RainViewer fetch error:', e);
+      }
+    };
+    fetchRadar();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // 2. Initialize Leaflet Map once and tear it down cleanly on unmount (zero memory leak)
   useEffect(() => {
     if (typeof window === 'undefined' || !mapContainerRef.current) return;
 
@@ -76,10 +110,58 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       }
       leafletMapRef.current = null;
       markersLayerRef.current = null;
+      radarTileLayerRef.current = null;
     };
   }, []);
 
-  // 2. Update markers and view when city, pois, nearbyCities, or filter change
+  // 3. Add / Update / Remove RainViewer Radar Layer dynamically
+  useEffect(() => {
+    if (!isMapReady || !leafletMapRef.current) return;
+    const map = leafletMapRef.current;
+
+    const updateRadar = async () => {
+      const L = (await import('leaflet')).default;
+
+      // Always remove previous radar layer first to prevent memory leak & stacking
+      if (radarTileLayerRef.current) {
+        try {
+          map.removeLayer(radarTileLayerRef.current);
+        } catch (e) {
+          console.warn('Layer removal warning:', e);
+        }
+        radarTileLayerRef.current = null;
+      }
+
+      if (isRadarActive && radarFrames.length > 0) {
+        const frame = radarFrames[currentFrameIdx];
+        if (frame) {
+          // Color scheme 2 = Universal Blue (Clean Apple Weather Aesthetic), smooth 1_1
+          const tileUrl = `${radarHostRef.current}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`;
+          const layer = L.tileLayer(tileUrl, {
+            opacity: 0.72,
+            zIndex: 40,
+          });
+          layer.addTo(map);
+          radarTileLayerRef.current = layer;
+        }
+      }
+    };
+
+    updateRadar();
+  }, [isMapReady, isRadarActive, currentFrameIdx, radarFrames]);
+
+  // 4. Play / Pause Radar Loop Animation
+  useEffect(() => {
+    if (!isPlayingRadar || !isRadarActive || radarFrames.length === 0) return;
+
+    const interval = setInterval(() => {
+      setCurrentFrameIdx((prev) => (prev + 1) % radarFrames.length);
+    }, 800);
+
+    return () => clearInterval(interval);
+  }, [isPlayingRadar, isRadarActive, radarFrames]);
+
+  // 5. Update markers and view when city, pois, nearbyCities, or filter change
   useEffect(() => {
     if (!isMapReady || !leafletMapRef.current || !markersLayerRef.current) return;
 
@@ -212,10 +294,21 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     };
   }, [isMapReady, city.latitude, city.longitude, city.name, pois, nearbyCities, filter, onSelectCity]);
 
+  // Formatted Frame Time label
+  const formattedFrameTime = useMemo(() => {
+    if (radarFrames.length === 0 || !radarFrames[currentFrameIdx]) return '--:--';
+    const date = new Date(radarFrames[currentFrameIdx].time * 1000);
+    const timeStr = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    if (currentFrameIdx === radarFrames.length - 1) {
+      return `Agora (${timeStr})`;
+    }
+    return timeStr;
+  }, [radarFrames, currentFrameIdx]);
+
   return (
     <View style={styles.container}>
       <View style={[styles.card, isDark ? styles.cardDark : styles.cardLight]}>
-        {/* Header with Segmented Filter Control */}
+        {/* Header with Segmented Filter Control & Radar Toggle */}
         <View style={styles.headerRow}>
           <View style={styles.titleWrap}>
             <Map size={16} color={isDark ? '#64b5f6' : '#0071e3'} />
@@ -224,81 +317,172 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
             </Text>
           </View>
 
-          {/* Apple Segmented Control */}
-          <View style={[styles.segmentedWrapper, isDark ? styles.segmentedDark : styles.segmentedLight]}>
+          {/* Right Controls Row: Segmented Filters + Rain Radar Toggle */}
+          <View style={styles.controlsRow}>
+            {/* Radar Toggle Button */}
             <TouchableOpacity
               style={[
-                styles.segmentBtn,
-                filter === 'all' && (isDark ? styles.segmentActiveDark : styles.segmentActiveLight),
+                styles.radarToggleBtn,
+                isRadarActive
+                  ? (isDark ? styles.radarActiveDark : styles.radarActiveLight)
+                  : (isDark ? styles.radarInactiveDark : styles.radarInactiveLight),
               ]}
-              onPress={() => setFilter('all')}
-              activeOpacity={0.7}
+              onPress={() => {
+                setIsRadarActive((prev) => !prev);
+                if (!isRadarActive) {
+                  setIsPlayingRadar(true);
+                } else {
+                  setIsPlayingRadar(false);
+                }
+              }}
+              activeOpacity={0.75}
             >
+              <CloudRain size={13} color={isRadarActive ? '#0071e3' : (isDark ? '#a1a1a6' : '#6e6e73')} />
               <Text
                 style={[
-                  styles.segmentText,
-                  filter === 'all'
-                    ? (isDark ? styles.textPrimaryDark : styles.textPrimaryLight)
+                  styles.radarToggleText,
+                  isRadarActive
+                    ? styles.radarActiveText
                     : (isDark ? styles.textSecondaryDark : styles.textSecondaryLight),
                 ]}
               >
-                Todos
+                Radar de Chuva
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[
-                styles.segmentBtn,
-                filter === 'pois' && (isDark ? styles.segmentActiveDark : styles.segmentActiveLight),
-              ]}
-              onPress={() => setFilter('pois')}
-              activeOpacity={0.7}
-            >
-              <Text
+            {/* Apple Segmented Control */}
+            <View style={[styles.segmentedWrapper, isDark ? styles.segmentedDark : styles.segmentedLight]}>
+              <TouchableOpacity
                 style={[
-                  styles.segmentText,
-                  filter === 'pois'
-                    ? (isDark ? styles.textPrimaryDark : styles.textPrimaryLight)
-                    : (isDark ? styles.textSecondaryDark : styles.textSecondaryLight),
+                  styles.segmentBtn,
+                  filter === 'all' && (isDark ? styles.segmentActiveDark : styles.segmentActiveLight),
                 ]}
+                onPress={() => setFilter('all')}
+                activeOpacity={0.7}
               >
-                Atrações ({pois.length})
-              </Text>
-            </TouchableOpacity>
+                <Text
+                  style={[
+                    styles.segmentText,
+                    filter === 'all'
+                      ? (isDark ? styles.textPrimaryDark : styles.textPrimaryLight)
+                      : (isDark ? styles.textSecondaryDark : styles.textSecondaryLight),
+                  ]}
+                >
+                  Todos
+                </Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[
-                styles.segmentBtn,
-                filter === 'nearby' && (isDark ? styles.segmentActiveDark : styles.segmentActiveLight),
-              ]}
-              onPress={() => setFilter('nearby')}
-              activeOpacity={0.7}
-            >
-              <Text
+              <TouchableOpacity
                 style={[
-                  styles.segmentText,
-                  filter === 'nearby'
-                    ? (isDark ? styles.textPrimaryDark : styles.textPrimaryLight)
-                    : (isDark ? styles.textSecondaryDark : styles.textSecondaryLight),
+                  styles.segmentBtn,
+                  filter === 'pois' && (isDark ? styles.segmentActiveDark : styles.segmentActiveLight),
                 ]}
+                onPress={() => setFilter('pois')}
+                activeOpacity={0.7}
               >
-                Vizinhas ({nearbyCities.length})
-              </Text>
-            </TouchableOpacity>
+                <Text
+                  style={[
+                    styles.segmentText,
+                    filter === 'pois'
+                      ? (isDark ? styles.textPrimaryDark : styles.textPrimaryLight)
+                      : (isDark ? styles.textSecondaryDark : styles.textSecondaryLight),
+                  ]}
+                >
+                  Atrações ({pois.length})
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.segmentBtn,
+                  filter === 'nearby' && (isDark ? styles.segmentActiveDark : styles.segmentActiveLight),
+                ]}
+                onPress={() => setFilter('nearby')}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.segmentText,
+                    filter === 'nearby'
+                      ? (isDark ? styles.textPrimaryDark : styles.textPrimaryLight)
+                      : (isDark ? styles.textSecondaryDark : styles.textSecondaryLight),
+                  ]}
+                >
+                  Vizinhas ({nearbyCities.length})
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
-        {/* Map Container View */}
+        {/* Map Container View with Floating Radar Controls */}
         <View style={styles.mapFrame}>
           <div
             ref={mapContainerRef}
             style={{
               width: '100%',
-              height: '380px',
+              height: '400px',
               borderRadius: '18px',
               overflow: 'hidden',
             }}
           />
+
+          {/* Floating Radar Glass Pill Bar (Visible when Radar is Active) */}
+          {isRadarActive && radarFrames.length > 0 && (
+            <View style={[styles.floatingRadarBar, isDark ? styles.radarBarDark : styles.radarBarLight]}>
+              {/* Play / Pause Button */}
+              <TouchableOpacity
+                style={styles.radarPlayBtn}
+                onPress={() => setIsPlayingRadar((prev) => !prev)}
+                activeOpacity={0.8}
+              >
+                {isPlayingRadar ? (
+                  <Pause size={12} color="#ffffff" fill="#ffffff" />
+                ) : (
+                  <Play size={12} color="#ffffff" fill="#ffffff" />
+                )}
+              </TouchableOpacity>
+
+              {/* Time display */}
+              <View style={styles.radarTimeBadge}>
+                <Clock size={11} color={isDark ? '#64b5f6' : '#0071e3'} />
+                <Text style={[styles.radarTimeText, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
+                  {formattedFrameTime}
+                </Text>
+              </View>
+
+              {/* Frame Timeline Dots */}
+              <View style={styles.radarDotsContainer}>
+                {radarFrames.map((_, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    style={[
+                      styles.radarDot,
+                      idx === currentFrameIdx && styles.radarDotActive,
+                      isDark ? styles.radarDotDark : styles.radarDotLight,
+                    ]}
+                    onPress={() => setCurrentFrameIdx(idx)}
+                    activeOpacity={0.7}
+                  />
+                ))}
+              </View>
+
+              {/* Radar Intensity Color Strip */}
+              <View style={styles.legendWrap}>
+                <Text style={[styles.legendLabel, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
+                  Intensidade:
+                </Text>
+                <div
+                  style={{
+                    width: '54px',
+                    height: '6px',
+                    borderRadius: '3px',
+                    background: 'linear-gradient(to right, #00b0ff, #00e676, #ffea00, #ff1744)',
+                  }}
+                />
+              </View>
+            </View>
+          )}
         </View>
       </View>
     </View>
@@ -344,6 +528,43 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
+  controlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  radarToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+  },
+  radarActiveLight: {
+    backgroundColor: '#eef5ff',
+    borderColor: '#0071e3',
+    borderWidth: 1,
+  },
+  radarActiveDark: {
+    backgroundColor: 'rgba(10, 132, 255, 0.2)',
+    borderColor: '#64b5f6',
+    borderWidth: 1,
+  },
+  radarInactiveLight: {
+    backgroundColor: '#f0f0f2',
+  },
+  radarInactiveDark: {
+    backgroundColor: '#2c2c2e',
+  },
+  radarToggleText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  radarActiveText: {
+    color: '#0071e3',
+  },
   segmentedWrapper: {
     flexDirection: 'row',
     padding: 2,
@@ -378,6 +599,83 @@ const styles = StyleSheet.create({
     width: '100%',
     borderRadius: 18,
     overflow: 'hidden',
+    position: 'relative',
+  },
+  floatingRadarBar: {
+    position: 'absolute',
+    bottom: 14,
+    left: 14,
+    right: 14,
+    zIndex: 500,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 18,
+    flexWrap: 'wrap',
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+  },
+  radarBarLight: {
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.08)',
+  },
+  radarBarDark: {
+    backgroundColor: 'rgba(28, 28, 30, 0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  radarPlayBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#0071e3',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radarTimeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  radarTimeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+  },
+  radarDotsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  radarDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  radarDotLight: {
+    backgroundColor: '#c7c7cc',
+  },
+  radarDotDark: {
+    backgroundColor: '#48484a',
+  },
+  radarDotActive: {
+    width: 14,
+    backgroundColor: '#0071e3',
+  },
+  legendWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  legendLabel: {
+    fontSize: 10,
+    fontWeight: '500',
   },
   textPrimaryLight: {
     color: '#1d1d1f',

@@ -16,6 +16,8 @@ import {
   Copy,
   Check,
   MapPin,
+  Heart,
+  Camera,
 } from 'lucide-react';
 import { City, CitySummary } from '../types';
 import { formatNumberBR } from '../services/utils';
@@ -25,6 +27,9 @@ interface HeroBannerProps {
   summary: CitySummary | null;
   theme: 'dark' | 'light';
   onNotify?: (message: string, type: 'info' | 'success' | 'warning' | 'error') => void;
+  isFavorite?: boolean;
+  onToggleFavorite?: () => void;
+  onOpenSnapshot?: () => void;
 }
 
 export const HeroBanner: React.FC<HeroBannerProps> = ({
@@ -32,6 +37,9 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   summary,
   theme,
   onNotify,
+  isFavorite = false,
+  onToggleFavorite,
+  onOpenSnapshot,
 }) => {
   const [currentTime, setCurrentTime] = useState<string>('');
   const [copiedCoords, setCopiedCoords] = useState(false);
@@ -103,6 +111,49 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
                 {currentTime || '--:--'}
               </Text>
             </View>
+
+            {/* Favorite Pill Button */}
+            {onToggleFavorite && (
+              <TouchableOpacity
+                style={[
+                  styles.actionPill,
+                  isDark ? styles.actionPillDark : styles.actionPillLight,
+                  isFavorite && (isDark ? styles.actionPillFavDark : styles.actionPillFavLight),
+                ]}
+                onPress={onToggleFavorite}
+                activeOpacity={0.7}
+              >
+                <Heart
+                  size={12}
+                  color={isFavorite ? '#f43f5e' : (isDark ? '#a1a1a6' : '#86868b')}
+                  fill={isFavorite ? '#f43f5e' : 'none'}
+                />
+                <Text
+                  style={[
+                    styles.actionPillText,
+                    isFavorite
+                      ? styles.actionPillFavText
+                      : (isDark ? styles.textSecondaryDark : styles.textSecondaryLight),
+                  ]}
+                >
+                  {isFavorite ? 'Salva' : 'Salvar'}
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Snapshot Story Button */}
+            {onOpenSnapshot && (
+              <TouchableOpacity
+                style={[styles.actionPill, isDark ? styles.actionPillDark : styles.actionPillLight]}
+                onPress={onOpenSnapshot}
+                activeOpacity={0.7}
+              >
+                <Camera size={12} color={isDark ? '#64b5f6' : '#0071e3'} />
+                <Text style={[styles.actionPillText, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
+                  Snapshot
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Large Clean City Heading */}
@@ -262,6 +313,33 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
+  },
+  actionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+  },
+  actionPillLight: {
+    backgroundColor: '#f5f5f7',
+  },
+  actionPillDark: {
+    backgroundColor: '#2c2c2e',
+  },
+  actionPillFavLight: {
+    backgroundColor: '#fff1f2',
+  },
+  actionPillFavDark: {
+    backgroundColor: 'rgba(244, 63, 94, 0.15)',
+  },
+  actionPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  actionPillFavText: {
+    color: '#f43f5e',
   },
   cityName: {
     fontSize: 34,
