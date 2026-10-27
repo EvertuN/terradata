@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,13 +7,65 @@ import {
   StyleSheet,
   Linking,
 } from 'react-native';
-import { Landmark, MapPin, ExternalLink, Star } from 'lucide-react';
+import { Landmark, ExternalLink, Star } from 'lucide-react';
 import { PointOfInterest } from '../types';
 
 interface POIsSectionProps {
   pois: PointOfInterest[];
   theme: 'dark' | 'light';
 }
+
+const CATEGORY_FALLBACK_IMAGES = {
+  cafe: 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=800&q=80',
+  historic: 'https://images.unsplash.com/photo-1519671482749-fd09be7ccebf?auto=format&fit=crop&w=800&q=80',
+  museum: 'https://images.unsplash.com/photo-1582555172866-f73bb12a2ab3?auto=format&fit=crop&w=800&q=80',
+  church: 'https://images.unsplash.com/photo-1548625361-195fe5787e91?auto=format&fit=crop&w=800&q=80',
+  park: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
+  waterfall: 'https://images.unsplash.com/photo-1432405972618-c60b0225b8f9?auto=format&fit=crop&w=800&q=80',
+  mirante: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80',
+  night: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=800&q=80',
+  theater: 'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?auto=format&fit=crop&w=800&q=80',
+  general: 'https://images.unsplash.com/photo-1477959858617-67f30bc75b82?auto=format&fit=crop&w=800&q=80',
+};
+
+function getPoiFallbackPhoto(category = '', title = ''): string {
+  const text = `${category} ${title}`.toLowerCase();
+  if (text.includes('cachoeira') || text.includes('cascata')) return CATEGORY_FALLBACK_IMAGES.waterfall;
+  if (text.includes('parque') || text.includes('ecol') || text.includes('botânico') || text.includes('jardim')) return CATEGORY_FALLBACK_IMAGES.park;
+  if (text.includes('museu') || text.includes('memorial') || text.includes('galeria')) return CATEGORY_FALLBACK_IMAGES.museum;
+  if (text.includes('igreja') || text.includes('catedral') || text.includes('santuário') || text.includes('capela')) return CATEGORY_FALLBACK_IMAGES.church;
+  if (text.includes('mirante') || text.includes('morro') || text.includes('serra') || text.includes('vista')) return CATEGORY_FALLBACK_IMAGES.mirante;
+  if (text.includes('teatro') || text.includes('cinema') || text.includes('centro cultural')) return CATEGORY_FALLBACK_IMAGES.theater;
+  if (text.includes('café') || text.includes('padaria') || text.includes('restaurante') || text.includes('gastronomia')) return CATEGORY_FALLBACK_IMAGES.night;
+  if (text.includes('praça') || text.includes('histórico') || text.includes('monumento')) return CATEGORY_FALLBACK_IMAGES.historic;
+  return CATEGORY_FALLBACK_IMAGES.general;
+}
+
+const SafePoiImage: React.FC<{ uri: string | null; category?: string; title?: string }> = ({
+  uri,
+  category,
+  title,
+}) => {
+  const fallback = getPoiFallbackPhoto(category, title);
+  const [imgUri, setImgUri] = useState<string>(uri || fallback);
+
+  useEffect(() => {
+    setImgUri(uri || fallback);
+  }, [uri, fallback]);
+
+  return (
+    <Image
+      source={{ uri: imgUri }}
+      onError={() => {
+        if (imgUri !== fallback) {
+          setImgUri(fallback);
+        }
+      }}
+      style={styles.image}
+      resizeMode="cover"
+    />
+  );
+};
 
 export const POIsSection: React.FC<POIsSectionProps> = ({ pois, theme }) => {
   if (!pois || pois.length === 0) return null;
@@ -45,15 +97,13 @@ export const POIsSection: React.FC<POIsSectionProps> = ({ pois, theme }) => {
               key={`${poi.pageId}-${idx}`}
               style={[styles.poiCard, isDark ? styles.poiCardDark : styles.poiCardLight]}
             >
-              {/* Photo or Placeholder */}
+              {/* Photo (Always populated, zero missing images) */}
               <View style={styles.imageContainer}>
-                {poi.thumbnail ? (
-                  <Image source={{ uri: poi.thumbnail }} style={styles.image} resizeMode="cover" />
-                ) : (
-                  <View style={[styles.placeholderImage, isDark ? styles.placeholderDark : styles.placeholderLight]}>
-                    <Landmark size={24} color="#86868b" />
-                  </View>
-                )}
+                <SafePoiImage
+                  uri={poi.thumbnail}
+                  category={poi.category}
+                  title={poi.title}
+                />
 
                 {/* Category Badge */}
                 {poi.category && (

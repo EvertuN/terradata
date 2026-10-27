@@ -156,6 +156,12 @@ export default function HomePage() {
     (city: City) => {
       setCurrentCity(city);
       setCachedCity(city);
+      setWeather(null);
+      setAirQuality(null);
+      setCitySummary(null);
+      setPois([]);
+      setNearbyCities([]);
+      setIsLoading(true);
       if (typeof window !== 'undefined') {
         localStorage.setItem('terradata_last_city', JSON.stringify(city));
       }
@@ -302,7 +308,32 @@ export default function HomePage() {
     );
   }
 
-  // 2. City Intelligence Dashboard Screen
+  // 2. Full-Screen Minimalist Loader Screen (Pure loading, zero fixed or stale items)
+  if (isLoading || !weather) {
+    return (
+      <View style={[styles.rootContainer, styles.loaderContainer, isDark ? styles.rootDark : styles.rootLight]}>
+        <View style={[styles.loaderCard, isDark ? styles.loaderCardDark : styles.loaderCardLight]}>
+          <ActivityIndicator size="large" color={isDark ? '#64b5f6' : '#0071e3'} />
+          <Text style={[styles.loaderTitle, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
+            Carregando {currentCity.name}...
+          </Text>
+          <Text style={[styles.loaderSubtitle, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
+            Sincronizando clima, qualidade do ar, satélite e atrações
+          </Text>
+        </View>
+
+        {toast && (
+          <Toast
+            message={toast.message}
+            type={toast.type}
+            onClose={() => setToast(null)}
+          />
+        )}
+      </View>
+    );
+  }
+
+  // 3. City Intelligence Dashboard Screen
   return (
     <View style={[styles.rootContainer, isDark ? styles.rootDark : styles.rootLight]}>
       {/* Apple Minimalist Header with Back to Cities Button */}
@@ -597,6 +628,43 @@ const styles = StyleSheet.create({
   },
   rootDark: {
     backgroundColor: '#000000',
+  },
+  loaderContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  loaderCard: {
+    paddingVertical: 36,
+    paddingHorizontal: 32,
+    borderRadius: 24,
+    alignItems: 'center',
+    gap: 16,
+    maxWidth: 380,
+    width: '100%',
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.05,
+    shadowRadius: 24,
+  },
+  loaderCardLight: {
+    backgroundColor: '#ffffff',
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  loaderCardDark: {
+    backgroundColor: '#1c1c1e',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  loaderTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  loaderSubtitle: {
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 18,
   },
   scrollView: {
     flex: 1,
