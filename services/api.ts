@@ -463,6 +463,8 @@ export const ApiService = {
               imageUrl = item.image.value.replace('http://', 'https://');
             }
 
+            const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(title + (cityName ? ' ' + cityName : ''))}`;
+
             pois.push({
               pageId: item.place?.value || Math.random(),
               title,
@@ -472,7 +474,8 @@ export const ApiService = {
               distFormatted: distKm >= 1 ? `${distKm.toFixed(1)} km` : `${Math.round(distKm * 1000)} m`,
               thumbnail: imageUrl,
               extract: item.placeDescription?.value || `${category} de destaque e visitação na região.`,
-              url: item.place?.value || `https://pt.wikipedia.org/wiki/${encodeURIComponent(title)}`,
+              url: mapsUrl,
+              mapsUrl,
               rating,
               reviewsCount,
               category
@@ -509,6 +512,7 @@ export const ApiService = {
               const page = pages[item.pageid] || {};
               const distKm = item.dist / 1000;
               const { rating, reviewsCount } = ApiService.calculatePoiReviews(15, pois.length);
+              const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.title + (cityName ? ' ' + cityName : ''))}`;
 
               pois.push({
                 pageId: item.pageid,
@@ -519,7 +523,8 @@ export const ApiService = {
                 distFormatted: distKm >= 1 ? `${distKm.toFixed(1)} km` : `${Math.round(item.dist)} m`,
                 thumbnail: page.thumbnail?.source || null,
                 extract: page.extract || 'Ponto histórico e atrativo cultural relevante.',
-                url: `https://pt.wikipedia.org/?curid=${item.pageid}`,
+                url: mapsUrl,
+                mapsUrl,
                 rating,
                 reviewsCount,
                 category: 'Ponto Turístico'
@@ -556,6 +561,7 @@ export const ApiService = {
               seen.add(item.title.toLowerCase());
               const page = pages[item.pageid] || {};
               const { rating, reviewsCount } = ApiService.calculatePoiReviews(20, pois.length);
+              const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.title + (cityName ? ' ' + cityName : ''))}`;
 
               pois.push({
                 pageId: item.pageid,
@@ -566,7 +572,8 @@ export const ApiService = {
                 distFormatted: '2.5 km',
                 thumbnail: page.thumbnail?.source || null,
                 extract: page.extract || item.snippet?.replace(/<[^>]+>/g, '') || 'Atração turística recomendada.',
-                url: `https://pt.wikipedia.org/?curid=${item.pageid}`,
+                url: mapsUrl,
+                mapsUrl,
                 rating,
                 reviewsCount,
                 category: 'Destaque Cultural'

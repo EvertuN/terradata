@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -7,65 +7,13 @@ import {
   StyleSheet,
   Linking,
 } from 'react-native';
-import { Landmark, ExternalLink, Star } from 'lucide-react';
+import { Landmark, ExternalLink, Star, Camera } from 'lucide-react';
 import { PointOfInterest } from '../types';
 
 interface POIsSectionProps {
   pois: PointOfInterest[];
   theme: 'dark' | 'light';
 }
-
-const CATEGORY_FALLBACK_IMAGES = {
-  cafe: 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=800&q=80',
-  historic: 'https://images.unsplash.com/photo-1519671482749-fd09be7ccebf?auto=format&fit=crop&w=800&q=80',
-  museum: 'https://images.unsplash.com/photo-1582555172866-f73bb12a2ab3?auto=format&fit=crop&w=800&q=80',
-  church: 'https://images.unsplash.com/photo-1548625361-195fe5787e91?auto=format&fit=crop&w=800&q=80',
-  park: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
-  waterfall: 'https://images.unsplash.com/photo-1432405972618-c60b0225b8f9?auto=format&fit=crop&w=800&q=80',
-  mirante: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80',
-  night: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=800&q=80',
-  theater: 'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?auto=format&fit=crop&w=800&q=80',
-  general: 'https://images.unsplash.com/photo-1477959858617-67f30bc75b82?auto=format&fit=crop&w=800&q=80',
-};
-
-function getPoiFallbackPhoto(category = '', title = ''): string {
-  const text = `${category} ${title}`.toLowerCase();
-  if (text.includes('cachoeira') || text.includes('cascata')) return CATEGORY_FALLBACK_IMAGES.waterfall;
-  if (text.includes('parque') || text.includes('ecol') || text.includes('botânico') || text.includes('jardim')) return CATEGORY_FALLBACK_IMAGES.park;
-  if (text.includes('museu') || text.includes('memorial') || text.includes('galeria')) return CATEGORY_FALLBACK_IMAGES.museum;
-  if (text.includes('igreja') || text.includes('catedral') || text.includes('santuário') || text.includes('capela')) return CATEGORY_FALLBACK_IMAGES.church;
-  if (text.includes('mirante') || text.includes('morro') || text.includes('serra') || text.includes('vista')) return CATEGORY_FALLBACK_IMAGES.mirante;
-  if (text.includes('teatro') || text.includes('cinema') || text.includes('centro cultural')) return CATEGORY_FALLBACK_IMAGES.theater;
-  if (text.includes('café') || text.includes('padaria') || text.includes('restaurante') || text.includes('gastronomia')) return CATEGORY_FALLBACK_IMAGES.night;
-  if (text.includes('praça') || text.includes('histórico') || text.includes('monumento')) return CATEGORY_FALLBACK_IMAGES.historic;
-  return CATEGORY_FALLBACK_IMAGES.general;
-}
-
-const SafePoiImage: React.FC<{ uri: string | null; category?: string; title?: string }> = ({
-  uri,
-  category,
-  title,
-}) => {
-  const fallback = getPoiFallbackPhoto(category, title);
-  const [imgUri, setImgUri] = useState<string>(uri || fallback);
-
-  useEffect(() => {
-    setImgUri(uri || fallback);
-  }, [uri, fallback]);
-
-  return (
-    <Image
-      source={{ uri: imgUri }}
-      onError={() => {
-        if (imgUri !== fallback) {
-          setImgUri(fallback);
-        }
-      }}
-      style={styles.image}
-      resizeMode="cover"
-    />
-  );
-};
 
 export const POIsSection: React.FC<POIsSectionProps> = ({ pois, theme }) => {
   if (!pois || pois.length === 0) return null;
@@ -92,72 +40,89 @@ export const POIsSection: React.FC<POIsSectionProps> = ({ pois, theme }) => {
 
         {/* POI Clean Cards Grid */}
         <View style={styles.grid}>
-          {pois.map((poi, idx) => (
-            <View
-              key={`${poi.pageId}-${idx}`}
-              style={[styles.poiCard, isDark ? styles.poiCardDark : styles.poiCardLight]}
-            >
-              {/* Photo (Always populated, zero missing images) */}
-              <View style={styles.imageContainer}>
-                <SafePoiImage
-                  uri={poi.thumbnail}
-                  category={poi.category}
-                  title={poi.title}
-                />
+          {pois.map((poi, idx) => {
+            const mapsUrl =
+              poi.mapsUrl ||
+              poi.url ||
+              `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(poi.title)}`;
 
-                {/* Category Badge */}
-                {poi.category && (
-                  <View style={styles.categoryBadge}>
-                    <Text style={styles.categoryText}>{poi.category}</Text>
+            return (
+              <View
+                key={`${poi.pageId}-${idx}`}
+                style={[styles.poiCard, isDark ? styles.poiCardDark : styles.poiCardLight]}
+              >
+                {/* Photo: Real photo from Wikipedia/Wikidata or Direct Google Maps Photos Action */}
+                <View style={styles.imageContainer}>
+                  {poi.thumbnail ? (
+                    <Image source={{ uri: poi.thumbnail }} style={styles.image} resizeMode="cover" />
+                  ) : (
+                    <TouchableOpacity
+                      style={[styles.placeholderImage, isDark ? styles.placeholderDark : styles.placeholderLight]}
+                      onPress={() => Linking.openURL(mapsUrl)}
+                      activeOpacity={0.75}
+                    >
+                      <Camera size={24} color={isDark ? '#64b5f6' : '#0071e3'} />
+                      <Text style={[styles.mapsBtnText, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
+                        Ver fotos no Google Maps
+                      </Text>
+                      <ExternalLink size={12} color={isDark ? '#64b5f6' : '#0071e3'} />
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Category Badge */}
+                  {poi.category && (
+                    <View style={styles.categoryBadge}>
+                      <Text style={styles.categoryText}>{poi.category}</Text>
+                    </View>
+                  )}
+
+                  {/* Distance Badge in Soft Apple Blur style */}
+                  <View style={styles.distanceBadge}>
+                    <Text style={styles.distanceText}>{poi.distFormatted}</Text>
                   </View>
-                )}
-
-                {/* Distance Badge in Soft Apple Blur style */}
-                <View style={styles.distanceBadge}>
-                  <Text style={styles.distanceText}>{poi.distFormatted}</Text>
-                </View>
-              </View>
-
-              {/* Body */}
-              <View style={styles.infoBody}>
-                {/* Rating & Reviews */}
-                <View style={styles.ratingRow}>
-                  <Star size={13} color="#f59e0b" fill="#f59e0b" />
-                  <Text style={[styles.ratingScore, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
-                    {poi.rating || 4.8}
-                  </Text>
-                  <Text style={[styles.reviewsCount, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
-                    ({poi.reviewsCount || '2.5k avaliações'})
-                  </Text>
                 </View>
 
-                <Text
-                  style={[styles.poiTitle, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}
-                  numberOfLines={1}
-                >
-                  {poi.title}
-                </Text>
+                {/* Body */}
+                <View style={styles.infoBody}>
+                  {/* Rating & Reviews */}
+                  <View style={styles.ratingRow}>
+                    <Star size={13} color="#f59e0b" fill="#f59e0b" />
+                    <Text style={[styles.ratingScore, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
+                      {poi.rating || 4.8}
+                    </Text>
+                    <Text style={[styles.reviewsCount, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
+                      ({poi.reviewsCount || '2.5k avaliações'})
+                    </Text>
+                  </View>
 
-                <Text
-                  style={[styles.poiExtract, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}
-                  numberOfLines={2}
-                >
-                  {poi.extract || 'Ponto histórico e cultural de grande destaque e alta visitação.'}
-                </Text>
+                  <Text
+                    style={[styles.poiTitle, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}
+                    numberOfLines={1}
+                  >
+                    {poi.title}
+                  </Text>
 
-                {poi.url ? (
+                  <Text
+                    style={[styles.poiExtract, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}
+                    numberOfLines={2}
+                  >
+                    {poi.extract || 'Ponto histórico e cultural de grande destaque e alta visitação.'}
+                  </Text>
+
                   <TouchableOpacity
-                    style={styles.actionPill}
-                    onPress={() => Linking.openURL(poi.url)}
+                    style={[styles.actionPill, isDark ? styles.actionPillDark : styles.actionPillLight]}
+                    onPress={() => Linking.openURL(mapsUrl)}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.actionText}>Ver detalhes</Text>
-                    <ExternalLink size={11} color="#0071e3" />
+                    <Text style={[styles.actionText, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
+                      Ver no Google Maps
+                    </Text>
+                    <ExternalLink size={11} color={isDark ? '#64b5f6' : '#0071e3'} />
                   </TouchableOpacity>
-                ) : null}
+                </View>
               </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
       </View>
     </View>
@@ -205,44 +170,49 @@ const styles = StyleSheet.create({
   },
   countBadge: {
     paddingVertical: 3,
-    paddingHorizontal: 10,
-    borderRadius: 12,
+    paddingHorizontal: 8,
+    borderRadius: 8,
   },
   countBadgeLight: {
-    backgroundColor: '#f5f5f7',
+    backgroundColor: '#f0f0f2',
   },
   countBadgeDark: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: '#2c2c2e',
   },
   countText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '500',
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 14,
+    gap: 16,
   },
   poiCard: {
     flex: 1,
     minWidth: 260,
-    maxWidth: 380,
+    maxWidth: '100%',
     borderRadius: 18,
     borderWidth: 1,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.02,
+    shadowRadius: 10,
   },
   poiCardLight: {
-    backgroundColor: '#f5f5f7',
-    borderColor: 'transparent',
+    backgroundColor: '#ffffff',
+    borderColor: 'rgba(0, 0, 0, 0.05)',
   },
   poiCardDark: {
-    backgroundColor: '#2c2c2e',
-    borderColor: 'transparent',
+    backgroundColor: '#262629',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   imageContainer: {
     width: '100%',
-    height: 140,
+    height: 150,
     position: 'relative',
+    backgroundColor: 'rgba(128, 128, 128, 0.08)',
   },
   image: {
     width: '100%',
@@ -253,21 +223,28 @@ const styles = StyleSheet.create({
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
+    padding: 16,
+    gap: 8,
   },
   placeholderLight: {
-    backgroundColor: '#e5e5ea',
+    backgroundColor: '#f5f8ff',
   },
   placeholderDark: {
-    backgroundColor: '#3a3a3c',
+    backgroundColor: '#1a2233',
+  },
+  mapsBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   categoryBadge: {
     position: 'absolute',
-    top: 8,
-    left: 8,
-    backgroundColor: 'rgba(29, 29, 31, 0.72)',
+    top: 10,
+    left: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
     paddingVertical: 3,
     paddingHorizontal: 8,
-    borderRadius: 10,
+    borderRadius: 8,
   },
   categoryText: {
     color: '#ffffff',
@@ -276,21 +253,22 @@ const styles = StyleSheet.create({
   },
   distanceBadge: {
     position: 'absolute',
-    bottom: 8,
-    right: 8,
-    backgroundColor: 'rgba(29, 29, 31, 0.72)',
+    bottom: 10,
+    right: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
     paddingVertical: 3,
     paddingHorizontal: 8,
-    borderRadius: 10,
+    borderRadius: 8,
   },
   distanceText: {
     color: '#ffffff',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
+    fontVariant: ['tabular-nums'],
   },
   infoBody: {
     padding: 14,
-    gap: 5,
+    gap: 6,
   },
   ratingRow: {
     flexDirection: 'row',
@@ -303,7 +281,6 @@ const styles = StyleSheet.create({
   },
   reviewsCount: {
     fontSize: 11,
-    fontWeight: '400',
   },
   poiTitle: {
     fontSize: 14,
@@ -311,19 +288,27 @@ const styles = StyleSheet.create({
   },
   poiExtract: {
     fontSize: 12,
-    lineHeight: 17,
+    lineHeight: 16,
   },
   actionPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 6,
     alignSelf: 'flex-start',
+    gap: 5,
+    marginTop: 6,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+  },
+  actionPillLight: {
+    backgroundColor: '#eef5ff',
+  },
+  actionPillDark: {
+    backgroundColor: 'rgba(10, 132, 255, 0.15)',
   },
   actionText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
-    color: '#0071e3',
   },
   textPrimaryLight: {
     color: '#1d1d1f',

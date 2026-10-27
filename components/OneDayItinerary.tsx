@@ -1,6 +1,6 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, Linking } from 'react-native';
-import { Compass, ExternalLink, MapPin, Coffee, SunMedium, Sunset, Moon, Utensils, Sparkles } from 'lucide-react';
+import { Compass, ExternalLink, MapPin, Camera } from 'lucide-react';
 import { City, PointOfInterest } from '../types';
 
 interface OneDayItineraryProps {
@@ -13,53 +13,9 @@ interface ItineraryStop {
   shift: string;
   hour: string;
   themeColor: string;
-  iconName: 'Coffee' | 'SunMedium' | 'Sunset' | 'Moon' | 'Utensils';
   poi: PointOfInterest;
-  photoUrl: string;
-  fallbackPhotoUrl: string;
+  mapsUrl: string;
 }
-
-// Guaranteed 100% reliable, high-resolution photography for all categories (Unsplash CDN)
-const CATEGORY_FALLBACK_IMAGES = {
-  cafe: 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=800&q=80',
-  bakery: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=800&q=80',
-  market: 'https://images.unsplash.com/photo-1533900298318-6b8da08a523e?auto=format&fit=crop&w=800&q=80',
-  historic: 'https://images.unsplash.com/photo-1519671482749-fd09be7ccebf?auto=format&fit=crop&w=800&q=80',
-  museum: 'https://images.unsplash.com/photo-1582555172866-f73bb12a2ab3?auto=format&fit=crop&w=800&q=80',
-  church: 'https://images.unsplash.com/photo-1548625361-195fe5787e91?auto=format&fit=crop&w=800&q=80',
-  park: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
-  waterfall: 'https://images.unsplash.com/photo-1432405972618-c60b0225b8f9?auto=format&fit=crop&w=800&q=80',
-  mirante: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80',
-  night: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=800&q=80',
-  theater: 'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?auto=format&fit=crop&w=800&q=80',
-  general: 'https://images.unsplash.com/photo-1477959858617-67f30bc75b82?auto=format&fit=crop&w=800&q=80',
-};
-
-// Safe Image component that never fails and always displays a photo
-const SafeItineraryImage: React.FC<{ uri: string; fallbackUri: string; style: any }> = ({
-  uri,
-  fallbackUri,
-  style,
-}) => {
-  const [sourceUri, setSourceUri] = useState<string>(uri || fallbackUri);
-
-  useEffect(() => {
-    setSourceUri(uri || fallbackUri);
-  }, [uri, fallbackUri]);
-
-  return (
-    <Image
-      source={{ uri: sourceUri }}
-      onError={() => {
-        if (sourceUri !== fallbackUri) {
-          setSourceUri(fallbackUri);
-        }
-      }}
-      style={style}
-      resizeMode="cover"
-    />
-  );
-};
 
 export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({ city, pois, theme }) => {
   const isDark = theme === 'dark';
@@ -131,12 +87,12 @@ export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({ city, pois, th
       fallbackDesc: string,
       index: number
     ): PointOfInterest => {
-      // Pick first unused POI if any
       const unused = list.find((p) => !usedIds.has(p.pageId));
       if (unused) {
         usedIds.add(unused.pageId);
         return unused;
       }
+      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fallbackTitle + ' ' + city.name)}`;
       return {
         pageId: 99000 + index,
         title: fallbackTitle,
@@ -146,7 +102,8 @@ export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({ city, pois, th
         distFormatted: `${(1.0 * (index + 1)).toFixed(1)} km`,
         thumbnail: null,
         extract: fallbackDesc,
-        url: `https://www.google.com/search?q=${encodeURIComponent(fallbackTitle)}`,
+        url: mapsUrl,
+        mapsUrl,
         rating: 4.8,
         reviewsCount: '2.5k avaliações',
         category: fallbackCat,
@@ -154,22 +111,13 @@ export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({ city, pois, th
     };
 
     // 1. TURNO MANHÃ (09h00)
-    // Check if any POI is specifically a food/cafe spot
     let morningPoi = findBestPoi(FOOD_KEYWORDS);
-    let morningShiftTitle = 'Café da Manhã & Passeio Matinal';
-    let morningIcon: 'Coffee' | 'Utensils' = 'Coffee';
-    let morningFallbackPhoto = CATEGORY_FALLBACK_IMAGES.cafe;
+    let morningShiftTitle = 'Café da Manhã & Sabores Locais';
 
-    if (morningPoi) {
-      morningShiftTitle = 'Café da Manhã & Sabores Locais';
-    } else {
-      // No food POI: Pick a cultural/historic/plaza spot, and DO NOT call it a café!
+    if (!morningPoi) {
       morningPoi = findBestPoi(CULTURE_KEYWORDS);
       if (morningPoi) {
         morningShiftTitle = 'Manhã Histórica & Cultural';
-        morningFallbackPhoto = morningPoi.category?.includes('Igreja')
-          ? CATEGORY_FALLBACK_IMAGES.church
-          : CATEGORY_FALLBACK_IMAGES.historic;
       } else {
         morningPoi = getRemainingOrFallback(
           `Centro Histórico & Praça Matriz de ${city.name}`,
@@ -178,20 +126,17 @@ export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({ city, pois, th
           0
         );
         morningShiftTitle = 'Manhã Histórica & Cultural';
-        morningFallbackPhoto = CATEGORY_FALLBACK_IMAGES.historic;
       }
     }
 
     // 2. TURNO TARDE (14h00)
     let afternoonPoi = findBestPoi(NATURE_KEYWORDS);
     let afternoonShiftTitle = 'Tarde no Parque & Natureza';
-    let afternoonFallbackPhoto = CATEGORY_FALLBACK_IMAGES.park;
 
     if (!afternoonPoi) {
       afternoonPoi = findBestPoi(CULTURE_KEYWORDS);
       if (afternoonPoi) {
         afternoonShiftTitle = 'Tarde Cultural & Museu';
-        afternoonFallbackPhoto = CATEGORY_FALLBACK_IMAGES.museum;
       } else {
         afternoonPoi = getRemainingOrFallback(
           `Parque Ecológico Municipal de ${city.name}`,
@@ -205,7 +150,6 @@ export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({ city, pois, th
     // 3. TURNO PÔR DO SOL (17h30)
     let sunsetPoi = findBestPoi(SUNSET_KEYWORDS);
     let sunsetShiftTitle = 'Pôr do Sol Panorâmico';
-    let sunsetFallbackPhoto = CATEGORY_FALLBACK_IMAGES.mirante;
 
     if (!sunsetPoi) {
       sunsetPoi = getRemainingOrFallback(
@@ -219,57 +163,51 @@ export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({ city, pois, th
     // 4. TURNO NOITE (20h00)
     let nightPoi = findBestPoi(NIGHT_KEYWORDS);
     let nightShiftTitle = 'Noite Gastronômica & Arte';
-    let nightFallbackPhoto = CATEGORY_FALLBACK_IMAGES.night;
 
     if (nightPoi) {
       const isTheater = nightPoi.title.toLowerCase().includes('teatro');
       nightShiftTitle = isTheater ? 'Noite Cultural & Teatro' : 'Noite Gastronômica & Sabores';
-      nightFallbackPhoto = isTheater ? CATEGORY_FALLBACK_IMAGES.theater : CATEGORY_FALLBACK_IMAGES.night;
     } else {
       nightPoi = getRemainingOrFallback(
         `Polo Gastronômico & Noite de ${city.name}`,
         'Gastronomia & Convivência',
-        `A melhor gastronomia regional e drinks artesanais para encerrar o dia em clima aconchegante.`,
+        `A melhor gastronomia regional e ambiente acolhedor para encerrar o dia em ${city.name}.`,
         3
       );
     }
+
+    const buildMapsUrl = (p: PointOfInterest) =>
+      p.mapsUrl ||
+      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.title + ' ' + city.name)}`;
 
     return [
       {
         shift: morningShiftTitle,
         hour: '09h00',
         themeColor: '#ca8a04',
-        iconName: morningIcon,
         poi: morningPoi,
-        photoUrl: morningPoi.thumbnail || morningFallbackPhoto,
-        fallbackPhotoUrl: morningFallbackPhoto,
+        mapsUrl: buildMapsUrl(morningPoi),
       },
       {
         shift: afternoonShiftTitle,
         hour: '14h00',
         themeColor: '#10b981',
-        iconName: 'SunMedium',
         poi: afternoonPoi,
-        photoUrl: afternoonPoi.thumbnail || afternoonFallbackPhoto,
-        fallbackPhotoUrl: afternoonFallbackPhoto,
+        mapsUrl: buildMapsUrl(afternoonPoi),
       },
       {
         shift: sunsetShiftTitle,
         hour: '17h30',
         themeColor: '#f97316',
-        iconName: 'Sunset',
         poi: sunsetPoi,
-        photoUrl: sunsetPoi.thumbnail || sunsetFallbackPhoto,
-        fallbackPhotoUrl: sunsetFallbackPhoto,
+        mapsUrl: buildMapsUrl(sunsetPoi),
       },
       {
         shift: nightShiftTitle,
         hour: '20h00',
         themeColor: '#8b5cf6',
-        iconName: 'Moon',
         poi: nightPoi,
-        photoUrl: nightPoi.thumbnail || nightFallbackPhoto,
-        fallbackPhotoUrl: nightFallbackPhoto,
+        mapsUrl: buildMapsUrl(nightPoi),
       },
     ];
   }, [pois, city]);
@@ -313,7 +251,7 @@ export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({ city, pois, th
               onPress={handleOpenGoogleMapsRoute}
               activeOpacity={0.7}
             >
-              <Text style={styles.routeBtnText}>Abrir no Google Maps</Text>
+              <Text style={styles.routeBtnText}>Traçar Rota Completa</Text>
               <ExternalLink size={12} color="#ffffff" />
             </TouchableOpacity>
 
@@ -377,23 +315,33 @@ export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({ city, pois, th
                       <Text style={styles.categoryText}>{stop.poi.category || 'Atração'}</Text>
                     </View>
 
-                    {stop.poi.url && (
-                      <TouchableOpacity
-                        onPress={() => Linking.openURL(stop.poi.url)}
-                        activeOpacity={0.65}
-                      >
-                        <Text style={styles.detailsLink}>Detalhes →</Text>
-                      </TouchableOpacity>
-                    )}
+                    <TouchableOpacity
+                      onPress={() => Linking.openURL(stop.mapsUrl)}
+                      activeOpacity={0.65}
+                      style={styles.mapsLinkRow}
+                    >
+                      <Text style={styles.detailsLink}>Ver fotos no Google Maps</Text>
+                      <ExternalLink size={10} color="#0071e3" />
+                    </TouchableOpacity>
                   </View>
                 </View>
 
-                {/* Guaranteed 100% Reliable Photo (Never missing) */}
-                <SafeItineraryImage
-                  uri={stop.photoUrl}
-                  fallbackUri={stop.fallbackPhotoUrl}
-                  style={styles.stopPhoto}
-                />
+                {/* Real Photo or Direct Google Maps Photos Card (No fake stock images) */}
+                {stop.poi.thumbnail ? (
+                  <Image source={{ uri: stop.poi.thumbnail }} style={styles.stopPhoto} resizeMode="cover" />
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.mapsPhotoCard, isDark ? styles.mapsPhotoCardDark : styles.mapsPhotoCardLight]}
+                    onPress={() => Linking.openURL(stop.mapsUrl)}
+                    activeOpacity={0.75}
+                  >
+                    <Camera size={18} color={isDark ? '#64b5f6' : '#0071e3'} />
+                    <Text style={[styles.mapsPhotoText, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
+                      Fotos no Maps
+                    </Text>
+                    <ExternalLink size={10} color={isDark ? '#a1a1a6' : '#86868b'} />
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           ))}
@@ -558,6 +506,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: 4,
+    flexWrap: 'wrap',
+    gap: 6,
   },
   categoryPill: {
     flexDirection: 'row',
@@ -568,6 +518,11 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#86868b',
   },
+  mapsLinkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   detailsLink: {
     fontSize: 11,
     color: '#0071e3',
@@ -577,6 +532,30 @@ const styles = StyleSheet.create({
     width: 80,
     height: 74,
     borderRadius: 12,
+  },
+  mapsPhotoCard: {
+    width: 80,
+    height: 74,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 6,
+    gap: 4,
+    borderWidth: 1,
+  },
+  mapsPhotoCardLight: {
+    backgroundColor: '#eef5ff',
+    borderColor: 'rgba(0, 113, 227, 0.15)',
+  },
+  mapsPhotoCardDark: {
+    backgroundColor: 'rgba(10, 132, 255, 0.12)',
+    borderColor: 'rgba(100, 181, 246, 0.2)',
+  },
+  mapsPhotoText: {
+    fontSize: 9,
+    fontWeight: '700',
+    textAlign: 'center',
+    lineHeight: 11,
   },
   textPrimaryLight: {
     color: '#1d1d1f',

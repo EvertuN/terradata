@@ -82,6 +82,7 @@ export interface PointOfInterest {
   rating?: number;
   reviewsCount?: string;
   category?: string;
+  mapsUrl?: string;
 }
 
 export interface NearbyCity {
