@@ -176,40 +176,36 @@ export default function HomePage() {
     }
   }, [handleSelectCity]);
 
-  // Main data fetch orchestrator with Promise.allSettled and race-condition guard
+  // One aggregate call: the Rust backend fans out, caches and coalesces upstream work.
   const loadCityData = useCallback(
     async (city: City) => {
       activeCityIdRef.current = city.id;
       setIsLoading(true);
       try {
-        const [resWeather, resAir, resWiki, resPois, resNearby] = await Promise.allSettled([
-          ApiService.getWeather(city.latitude, city.longitude),
-          ApiService.getAirQuality(city.latitude, city.longitude),
-          ApiService.getCitySummary(city.name, city.admin1),
-          ApiService.getNearbyPOIs(city.latitude, city.longitude, 12, city.name, city.admin1),
-          ApiService.getNearbyCities(city.latitude, city.longitude, city.name, city.admin1, city.country),
-        ]);
+        const dashboard = await ApiService.getCityDashboard(
+          city.latitude,
+          city.longitude,
+          city.name,
+          city.admin1,
+          city.country,
+          city.countryCode
+        );
 
         // Discard stale data if another city was selected while requests were in flight
         if (activeCityIdRef.current !== city.id) {
           return;
         }
 
-        if (resWeather.status === 'fulfilled' && resWeather.value) {
-          setWeather(resWeather.value);
+        if (!dashboard) {
+          showToast('Não foi possível sincronizar os dados da cidade', 'warning');
+          return;
         }
-        if (resAir.status === 'fulfilled' && resAir.value) {
-          setAirQuality(resAir.value);
-        }
-        if (resWiki.status === 'fulfilled' && resWiki.value) {
-          setCitySummary(resWiki.value);
-        }
-        if (resPois.status === 'fulfilled' && resPois.value) {
-          setPois(resPois.value);
-        }
-        if (resNearby.status === 'fulfilled' && resNearby.value) {
-          setNearbyCities(resNearby.value);
-        }
+
+        setWeather(dashboard.weather ?? null);
+        setAirQuality(dashboard.airQuality ?? null);
+        setCitySummary(dashboard.summary ?? null);
+        setPois(dashboard.pois ?? []);
+        setNearbyCities(dashboard.nearbyCities ?? []);
       } catch (err) {
         if (activeCityIdRef.current === city.id) {
           console.error('Error loading city data:', err);

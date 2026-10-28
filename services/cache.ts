@@ -28,6 +28,7 @@ export const CACHE_TTL = {
   POIS: 24 * 60 * 60 * 1000,        // 24 hours (monuments, museums, parks)
   NEARBY_CITIES: 24 * 60 * 60 * 1000,// 24 hours (neighboring municipalities)
   REVERSE_GEO: 24 * 60 * 60 * 1000, // 24 hours
+  DASHBOARD: 15 * 60 * 1000,        // 15 minutes (aggregate; keeps weather fresh)
 };
 
 /**

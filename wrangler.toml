@@ -1,8 +1,10 @@
 name = "terradata"
 compatibility_date = "2026-10-21"
 
+# Cloudflare Pages/Wrangler only hosts the static frontend.
+# The Rust API must be deployed separately; set NEXT_PUBLIC_API_BASE_URL at build time.
 [build]
-command = "npm run build"
+command = "npm run build:web"
 
 [assets]
 directory = "./out"

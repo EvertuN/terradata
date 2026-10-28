@@ -1,934 +1,272 @@
-import { City, WeatherData, AirQualityData, CitySummary, PointOfInterest, NearbyCity } from '../types';
+import {
+  AirQualityData,
+  City,
+  CityDashboard,
+  CitySummary,
+  NearbyCity,
+  PointOfInterest,
+  WeatherData,
+} from '../types';
 import { Cache, CACHE_TTL, normalizeCoords } from './cache';
-import { searchLocalFuzzyCities, normalizeCityName } from './fuzzySearch';
+import { normalizeCityName, searchLocalFuzzyCities } from './fuzzySearch';
+
+/**
+ * Thin browser client for the Rust API.
+ *
+ * All upstream calls (Open-Meteo, Wikipedia, Wikidata, Nominatim) happen on the
+ * server. This file only knows how to talk to our own `/api` endpoints. It keeps
+ * the localStorage layer so navigation between cities stays instant, and keeps a
+ * local fuzzy-search fallback so autocomplete still works if the API is briefly
+ * unreachable.
+ */
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || '').replace(/\/+$/, '');
+const DEFAULT_TIMEOUT_MS = 12_000;
+
+function apiUrl(path: string): string {
+  return `${API_BASE}${path}`;
+}
+
+async function fetchJson<T>(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T | null> {
+  if (typeof window === 'undefined') return null;
+
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+
+  try {
+    const response = await fetch(apiUrl(path), {
+      headers: { Accept: 'application/json' },
+      signal: controller?.signal,
+    });
+
+    if (!response.ok) {
+      if (response.status !== 404) {
+        console.warn(`TerraData API ${path} -> HTTP ${response.status}`);
+      }
+      return null;
+    }
+
+    return (await response.json()) as T;
+  } catch (error) {
+    if ((error as Error)?.name !== 'AbortError') {
+      console.warn(`TerraData API ${path} failed:`, error);
+    }
+    return null;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+function queryString(params: Record<string, string | number | undefined>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') {
+      search.set(key, String(value));
+    }
+  }
+  return search.toString();
+}
+
+function currentTimezone(): string {
+  if (typeof Intl === 'undefined') return 'UTC';
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+}
 
 export const ApiService = {
   /**
-   * Search cities using Open-Meteo Geocoding API + Local Brazilian & World Cities Database
-   * with typo tolerance and fuzzy matching (e.g., "Arque" -> "Ariquemes", "Florianopois", etc.)
+   * City autocomplete. The server runs the 5,601-city fuzzy index first and
+   * only calls Open-Meteo when it cannot answer confidently.
    */
   async searchCities(query: string): Promise<City[]> {
-    if (!query || query.trim().length < 2) return [];
-    const normalized = normalizeCityName(query);
+    const raw = query.trim();
+    if (raw.length < 2) return [];
+
+    const normalized = normalizeCityName(raw);
     const cacheKey = `search_${normalized}`;
 
-    return Cache.fetchWithCache(
+    return Cache.fetchWithCache<City[]>(
       cacheKey,
       CACHE_TTL.CITY_SEARCH,
       async () => {
-        const rawQuery = query.trim();
-        const encoded = encodeURIComponent(rawQuery);
-        const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encoded}&count=10&language=pt&format=json`;
+        const data = await fetchJson<City[]>(
+          `/api/cities/search?${queryString({ q: raw, limit: 10 })}`,
+          8_000
+        );
 
-        // 1. Run local fuzzy search on our indexed city database (instant offline/fast)
-        const localMatches = searchLocalFuzzyCities(rawQuery, 8);
-
-        // 2. Fetch Open-Meteo in parallel
-        let openMeteoCities: City[] = [];
-        try {
-          const res = await fetch(url);
-          if (res.ok) {
-            const data = await res.json();
-            if (data && Array.isArray(data.results)) {
-              openMeteoCities = data.results.map((c: any) => ({
-                id: c.id,
-                name: c.name,
-                latitude: c.latitude,
-                longitude: c.longitude,
-                elevation: c.elevation || 0,
-                country: c.country || '',
-                countryCode: (c.country_code || '').toLowerCase(),
-                admin1: c.admin1 || '',
-                timezone: c.timezone || 'UTC',
-                population: c.population || 0
-              }));
-            }
-          }
-        } catch (err) {
-          console.warn('Open-Meteo search error:', err);
+        if (data === null) {
+          return searchLocalFuzzyCities(raw, 10).map((item) => item.city);
         }
 
-        // 3. Score and merge all candidates with relevance ranking
-        interface ScoredCandidate {
-          city: City;
-          relevance: number;
-        }
-
-        const candidates: ScoredCandidate[] = [];
-        const seenKeys = new Set<string>();
-
-        const getCityKey = (c: City) =>
-          `${normalizeCityName(c.name)}|${(c.admin1 || '').toLowerCase()}|${(c.countryCode || '').toLowerCase()}`;
-
-        // Add local database matches (Brazil municipalities + top world cities)
-        for (const item of localMatches) {
-          const key = getCityKey(item.city);
-          if (!seenKeys.has(key)) {
-            seenKeys.add(key);
-            let rel = item.score;
-
-            if (item.score >= 1000) {
-              // Exact match from local database
-              rel = 2000;
-            } else {
-              // Boost Brazilian cities in Portuguese locale
-              if (item.city.countryCode === 'br') rel += 200;
-              if (item.city.isCapital) rel += 50;
-            }
-
-            candidates.push({ city: item.city, relevance: rel });
-          }
-        }
-
-        // Add Open-Meteo results
-        for (const c of openMeteoCities) {
-          const key = getCityKey(c);
-          if (!seenKeys.has(key)) {
-            seenKeys.add(key);
-            const cNorm = normalizeCityName(c.name);
-            let rel = 300;
-
-            if (cNorm === normalized) {
-              // Exact name match:
-              // Brazilian cities or major global cities get high exact priority
-              if (c.countryCode === 'br') {
-                rel = 2000;
-              } else if (c.population > 20000 || c.id === 2988507 /* Paris */ || c.timezone.startsWith('Europe/') || c.timezone.startsWith('America/New_York')) {
-                rel = 1900;
-              } else {
-                // Obscure tiny foreign village (e.g. Arque in Bolivia, pop 1,000)
-                rel = 800;
-              }
-            } else if (cNorm.startsWith(normalized)) {
-              // Prefix match: higher for Brazil or major global cities, lower for tiny foreign villages
-              const ratio = normalized.length / cNorm.length;
-              if (c.countryCode === 'br') {
-                rel = 780 + ratio * 100;
-              } else if (c.population > 50000) {
-                rel = 720 + ratio * 80;
-              } else {
-                rel = 500 + ratio * 50;
-              }
-            }
-
-            if (c.countryCode === 'br') rel += 80;
-            if (c.population > 1000000) rel += 80;
-            else if (c.population > 100000) rel += 40;
-
-            candidates.push({ city: c, relevance: rel });
-          }
-        }
-
-        // Sort descending by relevance
-        candidates.sort((a, b) => b.relevance - a.relevance);
-
-        return candidates.slice(0, 10).map(c => c.city);
+        return data;
       },
-      (res) => Array.isArray(res) && res.length > 0
+      (results) => Array.isArray(results) && results.length > 0
     );
   },
 
   /**
-   * Reverse Geocode coordinates using Nominatim OpenStreetMap (APIS.md Line 1389)
+   * Reverse geocode via the server. The backend falls back to the embedded city
+   * database if Nominatim is unavailable, so this rarely returns null.
    */
   async reverseGeocode(lat: number, lon: number): Promise<City | null> {
     const coordsKey = normalizeCoords(lat, lon);
     const cacheKey = `revgeo_${coordsKey}`;
+    const timezone = currentTimezone();
 
-    return Cache.fetchWithCache(
+    return Cache.fetchWithCache<City | null>(
       cacheKey,
       CACHE_TTL.REVERSE_GEO,
-      async () => {
-        const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=pt`;
-        try {
-          const res = await fetch(url, {
-            headers: { 'User-Agent': 'TerraDataCityApp/1.0 (https://github.com/EvertuN/terradata)' }
-          });
-          const data = await res.json();
-          const addr = data.address || {};
-          const cityName = addr.city || addr.town || addr.municipality || addr.village || addr.county || 'Local Atual';
-
-          return {
-            id: Math.round(lat * 1000 + lon * 1000),
-            name: cityName,
-            latitude: lat,
-            longitude: lon,
-            elevation: 0,
-            country: addr.country || '',
-            countryCode: (addr.country_code || '').toLowerCase(),
-            admin1: addr.state || addr.region || '',
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-            population: 0
-          };
-        } catch (err) {
-          console.warn('Reverse geocode error:', err);
-          return null;
-        }
-      },
-      (res) => Boolean(res && res.name)
+      () =>
+        fetchJson<City>(
+          `/api/geocode/reverse?${queryString({ lat, lon, tz: timezone })}`,
+          10_000
+        ),
+      (result) => Boolean(result && result.name)
     );
   },
 
-  /**
-   * Get Weather Forecast from Open-Meteo (APIS.md Line 2658)
-   */
   async getWeather(lat: number, lon: number): Promise<WeatherData | null> {
-    const coordsKey = normalizeCoords(lat, lon);
-    const cacheKey = `weather_${coordsKey}`;
+    const cacheKey = `weather_${normalizeCoords(lat, lon)}`;
 
-    return Cache.fetchWithCache(
+    return Cache.fetchWithCache<WeatherData | null>(
       cacheKey,
       CACHE_TTL.WEATHER,
-      async () => {
-        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m,surface_pressure&hourly=temperature_2m,precipitation_probability,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max&timezone=auto`;
-    try {
-      const res = await fetch(url);
-      const data = await res.json();
-
-      const daily: any[] = [];
-      if (data.daily && data.daily.time) {
-        for (let i = 0; i < data.daily.time.length; i++) {
-          daily.push({
-            date: data.daily.time[i],
-            weatherCode: data.daily.weather_code[i],
-            tempMax: Math.round(data.daily.temperature_2m_max[i]),
-            tempMin: Math.round(data.daily.temperature_2m_min[i]),
-            sunrise: data.daily.sunrise[i],
-            sunset: data.daily.sunset[i],
-            uvIndexMax: data.daily.uv_index_max[i]
-          });
-        }
-      }
-
-      return {
-        current: {
-          temperature: Math.round(data.current?.temperature_2m ?? 0),
-          apparentTemperature: Math.round(data.current?.apparent_temperature ?? 0),
-          humidity: data.current?.relative_humidity_2m ?? 0,
-          precipitation: data.current?.precipitation ?? 0,
-          weatherCode: data.current?.weather_code ?? 0,
-          windSpeed: Math.round(data.current?.wind_speed_10m ?? 0),
-          windDirection: data.current?.wind_direction_10m ?? 0,
-          surfacePressure: Math.round(data.current?.surface_pressure ?? 1013),
-          time: data.current?.time ?? ''
-        },
-        daily,
-        hourly: {
-          times: (data.hourly?.time || []).slice(0, 24),
-          temperatures: (data.hourly?.temperature_2m || []).slice(0, 24).map((t: number) => Math.round(t)),
-          precipitationProbabilities: (data.hourly?.precipitation_probability || []).slice(0, 24),
-          weatherCodes: (data.hourly?.weather_code || []).slice(0, 24)
-        }
-      };
-    } catch (err) {
-      console.error('Weather fetch error:', err);
-      return null;
-    }
-      },
-      (res) => Boolean(res && res.current)
+      () => fetchJson<WeatherData>(`/api/weather?${queryString({ lat, lon })}`),
+      (data) => Boolean(data && data.current)
     );
   },
 
-  /**
-   * Get Air Quality from Open-Meteo Air Quality API
-   */
   async getAirQuality(lat: number, lon: number): Promise<AirQualityData | null> {
-    const coordsKey = normalizeCoords(lat, lon);
-    const cacheKey = `air_${coordsKey}`;
+    const cacheKey = `air_${normalizeCoords(lat, lon)}`;
 
-    return Cache.fetchWithCache(
+    return Cache.fetchWithCache<AirQualityData | null>(
       cacheKey,
       CACHE_TTL.AIR_QUALITY,
-      async () => {
-        const url = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=european_aqi,us_aqi,pm10,pm2_5,nitrogen_dioxide,ozone`;
-    try {
-      const res = await fetch(url);
-      const data = await res.json();
-      const curr = data.current || {};
-      const aqi = curr.us_aqi || curr.european_aqi || 25;
-
-      let status = {
-        label: 'Excelente',
-        color: '#10b981',
-        recommendation: 'Qualidade do ar ideal para todas as atividades ao ar livre.'
-      };
-
-      if (aqi > 150) {
-        status = {
-          label: 'Insalubre',
-          color: '#ef4444',
-          recommendation: 'Evite atividades ao ar livre. Pessoas sensíveis devem permanecer em locais fechados.'
-        };
-      } else if (aqi > 100) {
-        status = {
-          label: 'Moderada / Sensível',
-          color: '#f97316',
-          recommendation: 'Grupos sensíveis podem sentir desconforto. Reduza esforços prolongados ao ar livre.'
-        };
-      } else if (aqi > 50) {
-        status = {
-          label: 'Aceitável',
-          color: '#eab308',
-          recommendation: 'Qualidade do ar aceitável; pequenos grupos sensíveis podem ter leve irritação.'
-        };
-      }
-
-      return {
-        europeanAqi: curr.european_aqi || 0,
-        usAqi: curr.us_aqi || 0,
-        pm10: Number((curr.pm10 || 0).toFixed(1)),
-        pm25: Number((curr.pm2_5 || 0).toFixed(1)),
-        nitrogenDioxide: Number((curr.nitrogen_dioxide || 0).toFixed(1)),
-        ozone: Number((curr.ozone || 0).toFixed(1)),
-        status
-      };
-    } catch (err) {
-      console.warn('Air quality error:', err);
-      return null;
-    }
-      },
-      (res) => Boolean(res && res.status)
+      () => fetchJson<AirQualityData>(`/api/air-quality?${queryString({ lat, lon })}`),
+      (data) => Boolean(data && data.status)
     );
   },
 
-  /**
-   * Get City Summary & High-Resolution Image (APIS.md Line 1877)
-   * Resolves actual city photography, avoiding flags, coat of arms or maps
-   */
-  async getCitySummary(cityName: string, fallbackName = ''): Promise<CitySummary> {
-    const clean = (cityName || '').trim().toLowerCase();
-    const cacheKey = `wiki_${clean}`;
+  async getCitySummary(cityName: string, fallbackName = ''): Promise<CitySummary | null> {
+    const cacheKey = `wiki_${normalizeCityName(cityName)}_${normalizeCityName(fallbackName)}`;
 
-    return Cache.fetchWithCache(
+    return Cache.fetchWithCache<CitySummary | null>(
       cacheKey,
       CACHE_TTL.CITY_SUMMARY,
-      async () => {
-    const isBadImage = (url: string | null) => {
-      if (!url) return true;
-      const lower = url.toLowerCase();
-      return (
-        lower.includes('bras') ||
-        lower.includes('flag') ||
-        lower.includes('bandeira') ||
-        lower.includes('coat_of_arms') ||
-        lower.includes('map') ||
-        lower.includes('locator') ||
-        lower.includes('localizador')
-      );
-    };
-
-    const fetchWiki = async (name: string, lang = 'pt') => {
-      try {
-        const res = await fetch(`https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}`);
-        if (!res.ok) return null;
-        const d = await res.json();
-        if (d.type === 'disambiguation') return null;
-        return d;
-      } catch {
-        return null;
-      }
-    };
-
-    let data = await fetchWiki(cityName, 'pt');
-    if (!data && fallbackName) data = await fetchWiki(fallbackName, 'pt');
-    
-    // Check if image is missing or is just a flag/coat of arms
-    let bestImage = data?.originalimage?.source || data?.thumbnail?.source || null;
-
-    if (isBadImage(bestImage)) {
-      // Try English Wikipedia which almost always has a skyline/city montage
-      const enData = await fetchWiki(cityName, 'en');
-      const enImage = enData?.originalimage?.source || enData?.thumbnail?.source || null;
-      if (enImage && !isBadImage(enImage)) {
-        bestImage = enImage;
-      }
-    }
-
-    // If still missing or poor, query Wikimedia Commons for skyline/panorama of the city
-    if (!bestImage || isBadImage(bestImage)) {
-      try {
-        const commonsUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(cityName + ' city skyline panorama')}&gsrlimit=3&prop=pageimages|imageinfo&iiprop=url&pithumbsize=1200&format=json&origin=*`;
-        const cRes = await fetch(commonsUrl);
-        const cData = await cRes.json();
-        const pages = Object.values(cData.query?.pages || {}) as any[];
-        if (pages.length > 0) {
-          const found = pages[0]?.thumbnail?.source || pages[0]?.imageinfo?.[0]?.url;
-          if (found && !isBadImage(found)) {
-            bestImage = found;
-          }
-        }
-      } catch (e) {
-        // Fallback gracefully
-      }
-    }
-
-    if (data) {
-      return {
-        title: data.title,
-        description: data.description || 'Polo cultural e econômico regional.',
-        extract: data.extract || 'Informações históricas e culturais detalhadas.',
-        thumbnail: bestImage,
-        bannerImage: bestImage,
-        url: data.content_urls?.desktop?.page || `https://pt.wikipedia.org/wiki/${encodeURIComponent(cityName)}`
-      };
-    }
-
-    return {
-      title: cityName,
-      description: 'Polo cultural e econômico regional',
-      extract: `${cityName} é um dos destinos de grande relevância, abrigando importante patrimônio arquitetônico, infraestrutura turística e atrações memoráveis.`,
-      thumbnail: bestImage,
-      bannerImage: bestImage,
-      url: `https://pt.wikipedia.org/wiki/${encodeURIComponent(cityName)}`
-    };
-      },
-      (res) => Boolean(res && res.title)
+      () =>
+        fetchJson<CitySummary>(
+          `/api/cities/summary?${queryString({ name: cityName, fallback: fallbackName })}`
+        ),
+      (data) => Boolean(data && data.title)
     );
   },
 
-  /**
-   * Helper: Parse WKT Point format "Point(lon lat)"
-   */
-  parseWktPoint(wkt: string | undefined): { lat: number; lon: number } | null {
-    if (!wkt) return null;
-    const match = wkt.match(/Point\(([-\d.]+)\s+([-\d.]+)\)/);
-    if (!match) return null;
-    return {
-      lon: parseFloat(match[1]),
-      lat: parseFloat(match[2])
-    };
-  },
-
-  /**
-   * Helper: Map Wikidata type label to elegant pastel category pill
-   */
-  mapPoiCategory(typeLabel: string | undefined, sitelinks: number): string {
-    if (!typeLabel) return sitelinks > 25 ? 'Atração Icônica' : 'Destaque Cultural';
-    const l = typeLabel.toLowerCase();
-    if (l.includes('queda de água') || l.includes('cascata') || l.includes('cachoeira')) return 'Cachoeira & Natureza';
-    if (l.includes('museu') || l.includes('memorial') || l.includes('galeria')) return 'Museu & História';
-    if (l.includes('parque') || l.includes('reserva') || l.includes('botânico') || l.includes('ecol')) return 'Parque & Ecoturismo';
-    if (l.includes('igreja') || l.includes('catedral') || l.includes('santuário') || l.includes('templo') || l.includes('capela')) return 'Patrimônio & Arquitetura';
-    if (l.includes('praça') || l.includes('largo')) return 'Praça & Convivência';
-    if (l.includes('aeroporto') || l.includes('aeródromo')) return 'Transporte & Acesso';
-    if (l.includes('monumento') || l.includes('escultura') || l.includes('património')) return 'Monumento Histórico';
-    if (l.includes('teatro') || l.includes('centro cultural') || l.includes('cinema')) return 'Arte & Cultura';
-    if (l.includes('mirante') || l.includes('serra') || l.includes('cordilheira') || l.includes('montanha') || l.includes('morro')) return 'Mirante & Paisagem';
-    return sitelinks > 25 ? 'Atração Icônica' : 'Destaque Local';
-  },
-
-  /**
-   * Helper: Generate realistic star ratings & review counts (Google-style)
-   */
-  calculatePoiReviews(sitelinks: number, index: number): { rating: number; reviewsCount: string } {
-    let rating = 4.6;
-    let reviewsCount = `${Math.max(380, sitelinks * 120 + (index * 45))} avaliações`;
-
-    if (sitelinks >= 40) {
-      rating = 4.9;
-      reviewsCount = `${(sitelinks * 380 / 1000).toFixed(1)}k avaliações`;
-    } else if (sitelinks >= 20) {
-      rating = 4.8;
-      reviewsCount = `${(sitelinks * 240 / 1000).toFixed(1)}k avaliações`;
-    } else if (sitelinks >= 10) {
-      rating = 4.7;
-      reviewsCount = `${(sitelinks * 180 / 1000).toFixed(1)}k avaliações`;
-    } else {
-      rating = Number((4.6 + (index % 3) * 0.1).toFixed(1));
-    }
-
-    return { rating, reviewsCount };
-  },
-
-  /**
-   * Get Famous Points of Interest with Ratings, Reviews & Real Photos
-   * Uses Wikidata SPARQL with adaptive radius, Wikipedia fallback, and cultural anchors for small towns
-   */
   async getNearbyPOIs(
     lat: number,
     lon: number,
     limit = 12,
     cityName = '',
-    admin1 = ''
+    admin1 = '',
+    countryCode = ''
   ): Promise<PointOfInterest[]> {
-    const coordsKey = normalizeCoords(lat, lon);
-    const cleanName = (cityName || '').trim().toLowerCase();
-    const cacheKey = `pois_${coordsKey}_${cleanName}_${limit}`;
+    const cacheKey = `pois_${normalizeCoords(lat, lon)}_${normalizeCityName(
+      cityName
+    )}_${limit}_${countryCode.toLowerCase()}`;
 
-    return Cache.fetchWithCache(
+    return Cache.fetchWithCache<PointOfInterest[]>(
       cacheKey,
       CACHE_TTL.POIS,
       async () => {
-        const pois: PointOfInterest[] = [];
-    const seen = new Set<string>();
-    const curLower = (cityName || '').toLowerCase();
-
-    // 1. Wikidata SPARQL with adaptive radius (35km first, then 65km if < 4 results)
-    for (const radius of [35, 65]) {
-      if (pois.length >= 4) break;
-
-      const sparql = `
-        SELECT DISTINCT ?place ?placeLabel ?placeDescription ?typeLabel ?image ?sitelinks ?coord WHERE {
-          SERVICE wikibase:around {
-            ?place wdt:P625 ?coord .
-            bd:serviceParam wikibase:center "Point(${lon} ${lat})"^^geo:wktLiteral .
-            bd:serviceParam wikibase:radius "${radius}" .
-          }
-          ?place wdt:P31 ?type .
-          VALUES ?type {
-            wd:Q570116  # tourist attraction
-            wd:Q33506   # museum
-            wd:Q4989906 # monument
-            wd:Q5003624 # memorial
-            wd:Q22698   # park
-            wd:Q473972  # nature reserve / reserva ecológica
-            wd:Q131645  # botanical garden
-            wd:Q435666  # zoo
-            wd:Q34038   # waterfall
-            wd:Q355304  # waterfall (catarata/cascata)
-            wd:Q839954  # archaeological site
-            wd:Q1081138 # historic center
-            wd:Q2977    # cathedral
-            wd:Q16970   # church
-            wd:Q44539   # temple / santuário
-            wd:Q174782  # square / praça
-            wd:Q13226383 # praça pública
-            wd:Q16560   # palace
-            wd:Q125191  # architectural landmark
-            wd:Q43229   # cultural institution
-            wd:Q179700  # cultural center
-            wd:Q8619    # theater
-            wd:Q24354   # theater building
-            wd:Q1076498 # stadium
-            wd:Q158438  # viewpoint / mirante
-            wd:Q46831   # mountain / morro
-            wd:Q1248784 # airport
-          }
-          ?place wikibase:sitelinks ?sitelinks .
-          OPTIONAL { ?place wdt:P18 ?image . }
-          SERVICE wikibase:label { bd:serviceParam wikibase:language "pt,en". }
-        }
-        ORDER BY DESC(?sitelinks)
-        LIMIT ${limit * 2}
-      `;
-
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000);
-
-        const res = await fetch(`https://query.wikidata.org/sparql?format=json&query=${encodeURIComponent(sparql)}`, {
-          headers: { 'User-Agent': 'TerraDataCityApp/1.0 (https://github.com/EvertuN/terradata)' },
-          signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-
-        if (res.ok) {
-          const data = await res.json();
-          const bindings = data.results?.bindings || [];
-
-          for (const item of bindings) {
-            const title = item.placeLabel?.value;
-            if (!title || (title.startsWith('Q') && !isNaN(Number(title.substring(1))))) continue;
-            const lowerTitle = title.toLowerCase();
-            if (lowerTitle === curLower) continue;
-            if (seen.has(lowerTitle)) continue;
-
-            const coords = ApiService.parseWktPoint(item.coord?.value);
-            if (!coords) continue;
-
-            seen.add(lowerTitle);
-            const sitelinks = parseInt(item.sitelinks?.value || '1', 10);
-            const distKm = ApiService.haversineDistance(lat, lon, coords.lat, coords.lon);
-            const { rating, reviewsCount } = ApiService.calculatePoiReviews(sitelinks, pois.length);
-            const category = ApiService.mapPoiCategory(item.typeLabel?.value, sitelinks);
-
-            let imageUrl: string | null = null;
-            if (item.image?.value) {
-              imageUrl = item.image.value.replace('http://', 'https://');
-            }
-
-            const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(title + (cityName ? ' ' + cityName : ''))}`;
-
-            pois.push({
-              pageId: item.place?.value || Math.random(),
-              title,
-              lat: coords.lat,
-              lon: coords.lon,
-              dist: Math.round(distKm * 1000),
-              distFormatted: distKm >= 1 ? `${distKm.toFixed(1)} km` : `${Math.round(distKm * 1000)} m`,
-              thumbnail: imageUrl,
-              extract: item.placeDescription?.value || `${category} de destaque e visitação na região.`,
-              url: mapsUrl,
-              mapsUrl,
-              rating,
-              reviewsCount,
-              category
-            });
-
-            if (pois.length >= limit) break;
-          }
-        }
-      } catch (err) {
-        console.warn('Wikidata POIs fetch error:', err);
-      }
-    }
-
-    // 2. Fallback: Wikipedia Geosearch (radius 10000m max)
-    if (pois.length < 3) {
-      try {
-        const url = `https://pt.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${lat}|${lon}&gsradius=10000&gslimit=10&format=json&origin=*`;
-        const res = await fetch(url);
-        if (res.ok) {
-          const data = await res.json();
-          const items = data.query?.geosearch || [];
-          const validItems = items.filter((i: any) => i.title.toLowerCase() !== curLower && !seen.has(i.title.toLowerCase()));
-
-          if (validItems.length > 0) {
-            const pageIds = validItems.map((i: any) => i.pageid).join('|');
-            const detUrl = `https://pt.wikipedia.org/w/api.php?action=query&pageids=${pageIds}&prop=pageimages|extracts&pithumbsize=600&exintro=1&explaintext=1&exsentences=2&format=json&origin=*`;
-            const detRes = await fetch(detUrl);
-            const detData = await detRes.json();
-            const pages = detData.query?.pages || {};
-
-            for (const item of validItems) {
-              if (seen.has(item.title.toLowerCase())) continue;
-              seen.add(item.title.toLowerCase());
-              const page = pages[item.pageid] || {};
-              const distKm = item.dist / 1000;
-              const { rating, reviewsCount } = ApiService.calculatePoiReviews(15, pois.length);
-              const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.title + (cityName ? ' ' + cityName : ''))}`;
-
-              pois.push({
-                pageId: item.pageid,
-                title: item.title,
-                lat: item.lat,
-                lon: item.lon,
-                dist: Math.round(item.dist),
-                distFormatted: distKm >= 1 ? `${distKm.toFixed(1)} km` : `${Math.round(item.dist)} m`,
-                thumbnail: page.thumbnail?.source || null,
-                extract: page.extract || 'Ponto histórico e atrativo cultural relevante.',
-                url: mapsUrl,
-                mapsUrl,
-                rating,
-                reviewsCount,
-                category: 'Ponto Turístico'
-              });
-
-              if (pois.length >= limit) break;
-            }
-          }
-        }
-      } catch (err) {
-        console.warn('Wikipedia Geosearch error:', err);
-      }
-    }
-
-    // 3. Fallback: Wikipedia Keyword Search
-    if (pois.length < 3 && cityName) {
-      try {
-        const srUrl = `https://pt.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(cityName + ' turismo OR parque OR museu OR cachoeira OR igreja')}&srlimit=6&format=json&origin=*`;
-        const srRes = await fetch(srUrl);
-        if (srRes.ok) {
-          const srData = await srRes.json();
-          const sItems = srData.query?.search || [];
-          const filtered = sItems.filter((s: any) => s.title.toLowerCase() !== curLower && !seen.has(s.title.toLowerCase()));
-
-          if (filtered.length > 0) {
-            const pageIds = filtered.map((f: any) => f.pageid).join('|');
-            const detUrl = `https://pt.wikipedia.org/w/api.php?action=query&pageids=${pageIds}&prop=pageimages|extracts&pithumbsize=600&exintro=1&explaintext=1&exsentences=2&format=json&origin=*`;
-            const detRes = await fetch(detUrl);
-            const detData = await detRes.json();
-            const pages = detData.query?.pages || {};
-
-            for (const item of filtered) {
-              if (seen.has(item.title.toLowerCase())) continue;
-              seen.add(item.title.toLowerCase());
-              const page = pages[item.pageid] || {};
-              const { rating, reviewsCount } = ApiService.calculatePoiReviews(20, pois.length);
-              const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.title + (cityName ? ' ' + cityName : ''))}`;
-
-              pois.push({
-                pageId: item.pageid,
-                title: item.title,
-                lat: lat + (Math.random() - 0.5) * 0.05,
-                lon: lon + (Math.random() - 0.5) * 0.05,
-                dist: 2500,
-                distFormatted: '2.5 km',
-                thumbnail: page.thumbnail?.source || null,
-                extract: page.extract || item.snippet?.replace(/<[^>]+>/g, '') || 'Atração turística recomendada.',
-                url: mapsUrl,
-                mapsUrl,
-                rating,
-                reviewsCount,
-                category: 'Destaque Cultural'
-              });
-
-              if (pois.length >= limit) break;
-            }
-          }
-        }
-      } catch (err) {
-        console.warn('Wikipedia Keyword search error:', err);
-      }
-    }
-
-    // 4. Fallback: Curated Guaranteed Anchors so small towns NEVER have empty POIs
-    if (pois.length === 0 && cityName) {
-      const anchors = [
-        {
-          title: `Centro Histórico & Praça Matriz de ${cityName}`,
-          category: 'Centro Histórico',
-          rating: 4.8,
-          reviewsCount: '3.4k avaliações',
-          extract: `Coração histórico e ponto de encontro tradicional de ${cityName}, com arborização, áreas de convivência e eventos culturais.`
-        },
-        {
-          title: `Igreja Matriz e Santuário de ${cityName}`,
-          category: 'Patrimônio & Arquitetura',
-          rating: 4.9,
-          reviewsCount: '4.2k avaliações',
-          extract: `Templo de referência histórica e espiritual do município, destacando-se pela arquitetura típica e celebrações tradicionais.`
-        },
-        {
-          title: `Parque Ecológico Municipal de ${cityName}`,
-          category: 'Parque & Ecoturismo',
-          rating: 4.7,
-          reviewsCount: '2.1k avaliações',
-          extract: `Área verde preservada com trilhas ecológicas, lazer ao ar livre e contato direto com a flora e fauna nativas.`
-        },
-        {
-          title: `Mirante & Circuito Panorâmico de ${cityName}`,
-          category: 'Mirante & Paisagem',
-          rating: 4.8,
-          reviewsCount: '1.9k avaliações',
-          extract: `Ponto elevado com vista panorâmica privilegiada de toda a cidade e dos vales e relevos da região.`
-        }
-      ];
-
-      for (let i = 0; i < anchors.length; i++) {
-        const a = anchors[i];
-        pois.push({
-          pageId: 900000 + i,
-          title: a.title,
-          lat: lat + (i * 0.008),
-          lon: lon + (i * 0.008),
-          dist: (i + 1) * 1200,
-          distFormatted: `${((i + 1) * 1.2).toFixed(1)} km`,
-          thumbnail: null,
-          extract: a.extract,
-          url: `https://www.google.com/search?q=${encodeURIComponent(a.title)}`,
-          rating: a.rating,
-          reviewsCount: a.reviewsCount,
-          category: a.category
-        });
-      }
-    }
-
-        return pois;
+        const data = await fetchJson<PointOfInterest[]>(
+          `/api/pois?${queryString({
+            lat,
+            lon,
+            limit,
+            name: cityName,
+            admin1,
+            countryCode,
+          })}`
+        );
+        return data ?? [];
       },
-      (res) => Array.isArray(res) && res.length > 0
+      (data) => Array.isArray(data) && data.length > 0
+    );
+  },
+
+  async getNearbyCities(
+    lat: number,
+    lon: number,
+    cityName = '',
+    admin1 = '',
+    country = '',
+    countryCode = ''
+  ): Promise<NearbyCity[]> {
+    const cacheKey = `nearby_${normalizeCoords(lat, lon)}_${normalizeCityName(
+      cityName
+    )}_${normalizeCityName(admin1)}_${normalizeCityName(country)}_${countryCode.toLowerCase()}`;
+
+    return Cache.fetchWithCache<NearbyCity[]>(
+      cacheKey,
+      CACHE_TTL.NEARBY_CITIES,
+      async () => {
+        const data = await fetchJson<NearbyCity[]>(
+          `/api/cities/nearby?${queryString({
+            lat,
+            lon,
+            name: cityName,
+            admin1,
+            country,
+            countryCode,
+          })}`
+        );
+        return data ?? [];
+      },
+      (data) => Array.isArray(data) && data.length > 0
     );
   },
 
   /**
-   * Get REAL Nearby Cities (excluding neighborhoods/districts and fake directional zones)
-   * Uses GeoDB Cities (with types=CITY, radius 120km) and Wikidata SPARQL with Q3184121 (municípios)
+   * Single aggregate call used by the dashboard. One browser request replaces
+   * five parallel requests; the server still fetches upstream data in parallel,
+   * but with cache, coalescing and per-host budgets.
    */
-  async getNearbyCities(
+  async getCityDashboard(
     lat: number,
     lon: number,
-    currentCityName = '',
+    cityName: string,
     admin1 = '',
-    country = ''
-  ): Promise<NearbyCity[]> {
-    const coordsKey = normalizeCoords(lat, lon);
-    const cleanName = (currentCityName || '').trim().toLowerCase();
-    const cacheKey = `nearby_${coordsKey}_${cleanName}`;
+    country = '',
+    countryCode = ''
+  ): Promise<CityDashboard | null> {
+    const name = cityName.trim() || 'Local Atual';
+    const cacheKey = `dashboard_${normalizeCoords(lat, lon)}_${normalizeCityName(
+      name
+    )}_${normalizeCityName(admin1)}_${countryCode.toLowerCase()}`;
 
-    return Cache.fetchWithCache(
+    return Cache.fetchWithCache<CityDashboard | null>(
       cacheKey,
-      CACHE_TTL.NEARBY_CITIES,
-      async () => {
-        const seen = new Set<string>();
-    const cities: NearbyCity[] = [];
-    const curLower = (currentCityName || '').toLowerCase();
-
-    // 1. GeoDB Cities (free tier radius 120km, limit 10, types=CITY)
-    const latStr = (lat >= 0 ? '+' : '') + lat.toFixed(4);
-    const lonStr = (lon >= 0 ? '+' : '') + lon.toFixed(4);
-    const gurl = `https://geodb-free-service.wirefreethought.com/v1/geo/locations/${latStr}${lonStr}/nearbyCities?radius=120&limit=10&types=CITY&distanceUnit=KM`;
-
-    try {
-      const res = await fetch(gurl);
-      if (res.ok) {
-        const data = await res.json();
-        if (data && Array.isArray(data.data) && data.data.length > 0) {
-          for (const c of data.data) {
-            const name = c.name || c.city;
-            if (!name) continue;
-
-            const lower = name.toLowerCase();
-            if (lower === curLower || (c.distance || 0) < 4) continue;
-            if (lower.includes('district') || lower.includes('arrondissement') || lower.includes('bairro') || lower.includes('greater ')) continue;
-            if (seen.has(lower)) continue;
-            seen.add(lower);
-
-            cities.push({
-              id: c.id,
-              name: name,
-              region: c.region || admin1 || '',
-              country: c.country || country || '',
-              countryCode: (c.countryCode || '').toLowerCase(),
-              latitude: c.latitude,
-              longitude: c.longitude,
-              population: c.population || null,
-              distanceKm: Math.round(c.distance || 0),
-              direction: ApiService.calculateBearing(lat, lon, c.latitude, c.longitude)
-            });
-
-            if (cities.length >= 8) break;
-          }
-        }
-      }
-    } catch (err) {
-      console.warn('GeoDB Cities fetch error:', err);
-    }
-
-    // 2. Wikidata SPARQL with Q3184121 (município do Brasil), Q515, Q15284, Q486972, Q3957
-    if (cities.length < 4) {
-      const sparql = `
-        SELECT DISTINCT ?city ?cityLabel ?pop ?coord WHERE {
-          SERVICE wikibase:around {
-            ?city wdt:P625 ?coord .
-            bd:serviceParam wikibase:center "Point(${lon} ${lat})"^^geo:wktLiteral .
-            bd:serviceParam wikibase:radius "120" .
-          }
-          ?city wdt:P31 ?type .
-          VALUES ?type { wd:Q515 wd:Q3184121 wd:Q15284 wd:Q486972 wd:Q3957 }
-          OPTIONAL { ?city wdt:P1082 ?pop . }
-          SERVICE wikibase:label { bd:serviceParam wikibase:language "pt,en". }
-        }
-        LIMIT 60
-      `;
-
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000);
-        const wres = await fetch(`https://query.wikidata.org/sparql?format=json&query=${encodeURIComponent(sparql)}`, {
-          headers: { 'User-Agent': 'TerraDataCityApp/1.0 (https://github.com/EvertuN/terradata)' },
-          signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-
-        if (wres.ok) {
-          const wdata = await wres.json();
-          const bindings = wdata.results?.bindings || [];
-
-          for (const b of bindings) {
-            const name = b.cityLabel?.value;
-            if (!name || (name.startsWith('Q') && !isNaN(Number(name.substring(1))))) continue;
-            const lower = name.toLowerCase();
-            if (lower === curLower) continue;
-            if (seen.has(lower)) continue;
-
-            const coords = ApiService.parseWktPoint(b.coord?.value);
-            if (!coords) continue;
-
-            const distKm = Math.round(ApiService.haversineDistance(lat, lon, coords.lat, coords.lon));
-            if (distKm < 4 || distKm > 140) continue;
-
-            seen.add(lower);
-            const pop = b.pop?.value ? parseInt(b.pop.value, 10) : null;
-
-            cities.push({
-              name,
-              region: admin1 || 'Região Próxima',
-              country: country || 'Brasil',
-              countryCode: 'br',
-              latitude: coords.lat,
-              longitude: coords.lon,
-              population: pop,
-              distanceKm: distKm,
-              direction: ApiService.calculateBearing(lat, lon, coords.lat, coords.lon)
-            });
-
-            if (cities.length >= 10) break;
-          }
-        }
-      } catch (e) {
-        console.warn('Wikidata cities fallback error:', e);
-      }
-    }
-
-    // 3. Fallback: Open-Meteo Geocoding search within the same state/admin1 if still empty
-    if (cities.length < 3 && admin1) {
-      try {
-        const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(admin1)}&count=10&language=pt&format=json`;
-        const res = await fetch(url);
-        if (res.ok) {
-          const data = await res.json();
-          const results = data.results || [];
-          for (const r of results) {
-            if (!r.name) continue;
-            const lower = r.name.toLowerCase();
-            if (lower === curLower || seen.has(lower)) continue;
-
-            const distKm = Math.round(ApiService.haversineDistance(lat, lon, r.latitude, r.longitude));
-            if (distKm < 4 || distKm > 180) continue;
-
-            seen.add(lower);
-            cities.push({
-              id: r.id,
-              name: r.name,
-              region: r.admin1 || admin1,
-              country: r.country || country || 'Brasil',
-              countryCode: (r.country_code || 'br').toLowerCase(),
-              latitude: r.latitude,
-              longitude: r.longitude,
-              population: r.population || null,
-              distanceKm: distKm,
-              direction: ApiService.calculateBearing(lat, lon, r.latitude, r.longitude)
-            });
-
-            if (cities.length >= 8) break;
-          }
-        }
-      } catch (e) {
-        console.warn('Open-Meteo nearby fallback error:', e);
-      }
-    }
-
-        // Sort by distance ascending
-        cities.sort((a, b) => a.distanceKm - b.distanceKm);
-        return cities.slice(0, 8);
-      },
-      (res) => Array.isArray(res) && res.length > 0
+      CACHE_TTL.DASHBOARD,
+      () =>
+        fetchJson<CityDashboard>(
+          `/api/city?${queryString({
+            lat,
+            lon,
+            name,
+            admin1,
+            country,
+            countryCode,
+            limit: 12,
+          })}`,
+          15_000
+        ),
+      (data) =>
+        Boolean(
+          data &&
+            (data.weather ||
+              data.airQuality ||
+              data.summary ||
+              (data.pois && data.pois.length > 0) ||
+              (data.nearbyCities && data.nearbyCities.length > 0))
+        )
     );
-  },
-
-  calculateBearing(lat1: number, lon1: number, lat2: number, lon2: number): string {
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const y = Math.sin(dLon) * Math.cos(lat2 * Math.PI / 180);
-    const x = Math.cos(lat1 * Math.PI / 180) * Math.sin(lat2 * Math.PI / 180) -
-              Math.sin(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.cos(dLon);
-    let brng = Math.atan2(y, x) * 180 / Math.PI;
-    brng = (brng + 360) % 360;
-
-    const directions = ['N', 'NE', 'L', 'SE', 'S', 'SO', 'O', 'NO'];
-    const index = Math.round(brng / 45) % 8;
-    return directions[index];
-  },
-
-  haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-    const R = 6371; // Earth radius in km
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
   },
 
   getWeatherMeta(code: number) {
@@ -953,13 +291,14 @@ export const ApiService = {
       82: { label: 'Tempestade de Chuva', icon: 'CloudLightning', color: '#1e40af' },
       95: { label: 'Tempestade com Trovoadas', icon: 'CloudLightning', color: '#eab308' },
       96: { label: 'Tempestade com Granizo', icon: 'CloudLightning', color: '#f59e0b' },
-      99: { label: 'Tempestade Severa', icon: 'CloudLightning', color: '#ef4444' }
+      99: { label: 'Tempestade Severa', icon: 'CloudLightning', color: '#ef4444' },
     };
+
     return codes[code] || { label: 'Tempo Instável', icon: 'Cloud', color: '#94a3b8' };
   },
 
   formatNumber(val: number | null | undefined): string {
     if (val === null || val === undefined || isNaN(val)) return 'N/D';
     return new Intl.NumberFormat('pt-BR').format(val);
-  }
+  },
 };

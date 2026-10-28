@@ -1,13 +1,19 @@
 {
   "name": "terradata",
-  "version": "1.0.0",
-  "description": "TerraData - Agregador Geográfico e Meteorológico em React Native + Next.js + TypeScript",
+  "version": "2.0.0",
+  "description": "TerraData - Agregador Geográfico e Meteorológico com backend Rust e frontend Next.js",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3000",
-    "build": "next build",
-    "start": "npx serve out -l 3000",
-    "preview": "npx serve out"
+    "dev": "node scripts/dev.js",
+    "dev:web": "next dev -p 3000",
+    "dev:api": "cargo run --manifest-path backend/Cargo.toml",
+    "build": "npm run build:web && npm run build:api",
+    "build:web": "next build",
+    "build:api": "cargo build --release --manifest-path backend/Cargo.toml",
+    "start": "cargo run --release --manifest-path backend/Cargo.toml",
+    "preview": "npm run build && npm start",
+    "test:api": "cargo test --manifest-path backend/Cargo.toml",
+    "export:cities": "node scripts/export_cities.js"
   },
   "dependencies": {
     "chart.js": "^4.4.6",

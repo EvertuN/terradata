@@ -1,0 +1,43 @@
+[package]
+name = "terradata-api"
+version = "2.0.0"
+edition = "2021"
+rust-version = "1.89"
+description = "Fast, cache-first API gateway for TerraData"
+license = "MIT"
+
+[dependencies]
+anyhow = "1"
+axum = { version = "0.8", features = ["http2", "json", "query", "tokio"] }
+dashmap = "6"
+dotenvy = "0.15"
+fastrand = "2"
+moka = { version = "0.12", features = ["future"] }
+reqwest = { version = "0.12", default-features = false, features = [
+    "brotli",
+    "charset",
+    "gzip",
+    "http2",
+    "json",
+    "rustls-tls-webpki-roots",
+] }
+serde = { version = "1", features = ["derive", "rc"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tower-http = { version = "0.6", features = [
+    "compression-gzip",
+    "cors",
+    "fs",
+    "trace",
+] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+unicode-normalization = "0.1"
+urlencoding = "2"
+
+[profile.release]
+lto = "thin"
+codegen-units = 4
+strip = "symbols"
+opt-level = 3

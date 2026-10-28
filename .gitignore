@@ -10,6 +10,9 @@
 /build
 /dist
 
+# Rust backend build artifacts
+/backend/target/
+
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts

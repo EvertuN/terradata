@@ -100,3 +100,15 @@ export interface NearbyCity {
   distanceKm: number;
   direction: string;
 }
+
+/**
+ * Aggregate payload from `GET /api/city`. The backend fills in parallel and
+ * returns `null` for any upstream section that is temporarily unavailable.
+ */
+export interface CityDashboard {
+  weather: WeatherData | null;
+  airQuality: AirQualityData | null;
+  summary: CitySummary | null;
+  pois: PointOfInterest[];
+  nearbyCities: NearbyCity[];
+}
