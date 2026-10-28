@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Linking } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Linking } from 'react-native';
 import { Compass, ExternalLink, MapPin } from 'lucide-react';
 import { City, PointOfInterest } from '../types';
+import { LazyImage } from './LazyImage';
 
 interface OneDayItineraryProps {
   city: City;
@@ -327,7 +328,7 @@ export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({ city, pois, th
 
                 {/* Real photo: rendered ONLY if available, otherwise card adapts compactly */}
                 {stop.poi.thumbnail ? (
-                  <Image source={{ uri: stop.poi.thumbnail }} style={styles.stopPhoto} resizeMode="cover" />
+                  <LazyImage src={stop.poi.thumbnail} alt={stop.poi.title} style={styles.stopPhoto} />
                 ) : null}
               </View>
             </View>

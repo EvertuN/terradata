@@ -6,6 +6,15 @@ const nextConfig = {
   },
   reactStrictMode: true,
   transpilePackages: ['react-native-web'],
+  experimental: {
+    // Tree-shake lucide-react's barrel file per icon instead of bundling it all.
+    optimizePackageImports: ['lucide-react'],
+  },
+  compiler: {
+    // Strip debug logs from production bundles (keep warnings/errors).
+    removeConsole:
+      process.env.NODE_ENV === 'production' ? { exclude: ['error', 'warn'] } : false,
+  },
   webpack: (config) => {
     config.resolve.alias = {
       ...(config.resolve.alias || {}),

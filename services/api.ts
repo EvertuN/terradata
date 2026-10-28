@@ -1,8 +1,41 @@
 import { City, WeatherData, AirQualityData, CitySummary, PointOfInterest, NearbyCity } from '../types';
 import { Cache, CACHE_TTL, normalizeCoords } from './cache';
-import { searchLocalFuzzyCities, normalizeCityName } from './fuzzySearch';
+import { normalizeCityName } from './textMatch';
+import { pickWikiImage, toWikiThumb } from './images';
+
+/** Default timeout for public API calls (avoids a stuck loading screen). */
+const FETCH_TIMEOUT_MS = 8000;
+
+/**
+ * AbortSignal.timeout is available in every modern browser; the fallback keeps
+ * older Safari versions working.
+ */
+function timeoutSignal(ms: number = FETCH_TIMEOUT_MS): AbortSignal | undefined {
+  if (typeof AbortSignal !== 'undefined' && typeof (AbortSignal as any).timeout === 'function') {
+    return AbortSignal.timeout(ms);
+  }
+  if (typeof AbortController === 'undefined') return undefined;
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), ms);
+  return controller.signal;
+}
+
+let _citySearchPreload: Promise<void> | null = null;
 
 export const ApiService = {
+  /**
+   * Starts downloading + indexing the local city database before the first
+   * keystroke (scheduled during browser idle time).
+   */
+  preloadCitySearch(): Promise<void> {
+    if (!_citySearchPreload) {
+      _citySearchPreload = import('./fuzzySearch')
+        .then((mod) => mod.warmupCitySearch())
+        .catch(() => undefined);
+    }
+    return _citySearchPreload;
+  },
+
   /**
    * Search cities using Open-Meteo Geocoding API + Local Brazilian & World Cities Database
    * with typo tolerance and fuzzy matching (e.g., "Arque" -> "Ariquemes", "Florianopois", etc.)
@@ -20,35 +53,39 @@ export const ApiService = {
         const encoded = encodeURIComponent(rawQuery);
         const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encoded}&count=10&language=pt&format=json`;
 
-        // 1. Run local fuzzy search on our indexed city database (instant offline/fast)
+        // 1. Start the network request first so it overlaps with loading and
+        //    indexing the local city database (the ~400 KB DB is a lazy chunk).
+        const remoteRequest: Promise<City[]> = fetch(url, { signal: timeoutSignal(6000) })
+          .then(async (res) => {
+            if (!res.ok) return [];
+            const data = await res.json();
+            if (!data || !Array.isArray(data.results)) return [];
+            return data.results.map((c: any) => ({
+              id: c.id,
+              name: c.name,
+              latitude: c.latitude,
+              longitude: c.longitude,
+              elevation: c.elevation || 0,
+              country: c.country || '',
+              countryCode: (c.country_code || '').toLowerCase(),
+              admin1: c.admin1 || '',
+              timezone: c.timezone || 'UTC',
+              population: c.population || 0
+            }));
+          })
+          .catch((err) => {
+            console.warn('Open-Meteo search error:', err);
+            return [];
+          });
+
+        // 2. Local fuzzy search (instant once the chunk is in memory).
+        const { searchLocalFuzzyCities } = await import('./fuzzySearch');
         const localMatches = searchLocalFuzzyCities(rawQuery, 8);
 
-        // 2. Fetch Open-Meteo in parallel
-        let openMeteoCities: City[] = [];
-        try {
-          const res = await fetch(url);
-          if (res.ok) {
-            const data = await res.json();
-            if (data && Array.isArray(data.results)) {
-              openMeteoCities = data.results.map((c: any) => ({
-                id: c.id,
-                name: c.name,
-                latitude: c.latitude,
-                longitude: c.longitude,
-                elevation: c.elevation || 0,
-                country: c.country || '',
-                countryCode: (c.country_code || '').toLowerCase(),
-                admin1: c.admin1 || '',
-                timezone: c.timezone || 'UTC',
-                population: c.population || 0
-              }));
-            }
-          }
-        } catch (err) {
-          console.warn('Open-Meteo search error:', err);
-        }
+        // 3. Collect the remote results.
+        const openMeteoCities = await remoteRequest;
 
-        // 3. Score and merge all candidates with relevance ranking
+        // 4. Score and merge all candidates with relevance ranking
         interface ScoredCandidate {
           city: City;
           relevance: number;
@@ -142,7 +179,8 @@ export const ApiService = {
         const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=pt`;
         try {
           const res = await fetch(url, {
-            headers: { 'User-Agent': 'TerraDataCityApp/1.0 (https://github.com/EvertuN/terradata)' }
+            headers: { 'User-Agent': 'TerraDataCityApp/1.0 (https://github.com/EvertuN/terradata)' },
+            signal: timeoutSignal()
           });
           const data = await res.json();
           const addr = data.address || {};
@@ -180,9 +218,9 @@ export const ApiService = {
       cacheKey,
       CACHE_TTL.WEATHER,
       async () => {
-        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m,surface_pressure&hourly=temperature_2m,precipitation_probability,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max&timezone=auto`;
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m,surface_pressure&hourly=temperature_2m,precipitation_probability,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max&forecast_hours=24&timezone=auto`;
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, { signal: timeoutSignal() });
       const data = await res.json();
 
       const daily: any[] = [];
@@ -242,7 +280,7 @@ export const ApiService = {
       async () => {
         const url = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=european_aqi,us_aqi,pm10,pm2_5,nitrogen_dioxide,ozone`;
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, { signal: timeoutSignal() });
       const data = await res.json();
       const curr = data.current || {};
       const aqi = curr.us_aqi || curr.european_aqi || 25;
@@ -319,7 +357,9 @@ export const ApiService = {
 
     const fetchWiki = async (name: string, lang = 'pt') => {
       try {
-        const res = await fetch(`https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}`);
+        const res = await fetch(`https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}`, {
+          signal: timeoutSignal(6000)
+        });
         if (!res.ok) return null;
         const d = await res.json();
         if (d.type === 'disambiguation') return null;
@@ -332,13 +372,14 @@ export const ApiService = {
     let data = await fetchWiki(cityName, 'pt');
     if (!data && fallbackName) data = await fetchWiki(fallbackName, 'pt');
     
-    // Check if image is missing or is just a flag/coat of arms
-    let bestImage = data?.originalimage?.source || data?.thumbnail?.source || null;
+    // Check if image is missing or is just a flag/coat of arms.
+    // Use a resized Wikimedia thumbnail instead of the original upload.
+    let bestImage = pickWikiImage(data, 1280);
 
     if (isBadImage(bestImage)) {
       // Try English Wikipedia which almost always has a skyline/city montage
       const enData = await fetchWiki(cityName, 'en');
-      const enImage = enData?.originalimage?.source || enData?.thumbnail?.source || null;
+      const enImage = pickWikiImage(enData, 1280);
       if (enImage && !isBadImage(enImage)) {
         bestImage = enImage;
       }
@@ -348,13 +389,14 @@ export const ApiService = {
     if (!bestImage || isBadImage(bestImage)) {
       try {
         const commonsUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(cityName + ' city skyline panorama')}&gsrlimit=3&prop=pageimages|imageinfo&iiprop=url&pithumbsize=1200&format=json&origin=*`;
-        const cRes = await fetch(commonsUrl);
+        const cRes = await fetch(commonsUrl, { signal: timeoutSignal(6000) });
         const cData = await cRes.json();
         const pages = Object.values(cData.query?.pages || {}) as any[];
         if (pages.length > 0) {
           const found = pages[0]?.thumbnail?.source || pages[0]?.imageinfo?.[0]?.url;
-          if (found && !isBadImage(found)) {
-            bestImage = found;
+          const resized = toWikiThumb(found, 1280);
+          if (resized && !isBadImage(resized)) {
+            bestImage = resized;
           }
         }
       } catch (e) {
@@ -544,7 +586,8 @@ export const ApiService = {
 
             let imageUrl: string | null = null;
             if (item.image?.value) {
-              imageUrl = item.image.value.replace('http://', 'https://');
+              // Resized Commons thumbnail (originals are often several MB).
+              imageUrl = toWikiThumb(item.image.value, 800);
             }
 
             const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(title + (cityName ? ' ' + cityName : ''))}`;

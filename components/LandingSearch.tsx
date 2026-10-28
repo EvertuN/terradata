@@ -85,6 +85,18 @@ export const LandingSearch: React.FC<LandingSearchProps> = ({
     };
   }, [searchQuery]);
 
+  // Warm the lazy city-database chunk during idle time so the first search is
+  // instant, without competing with the initial render or fonts.
+  useEffect(() => {
+    const w = window as any;
+    if (typeof w.requestIdleCallback === 'function') {
+      const id = w.requestIdleCallback(() => ApiService.preloadCitySearch(), { timeout: 3000 });
+      return () => w.cancelIdleCallback?.(id);
+    }
+    const id = setTimeout(() => ApiService.preloadCitySearch(), 1500);
+    return () => clearTimeout(id);
+  }, []);
+
   const handleSelectSuggestion = (city: City) => {
     setSearchQuery('');
     setSuggestions([]);

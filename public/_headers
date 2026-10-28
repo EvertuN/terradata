@@ -4,6 +4,10 @@
 /_next/static/*
   Cache-Control: public, max-age=31536000, immutable
 
+# Local Leaflet stylesheet (stable filename)
+/leaflet.css
+  Cache-Control: public, max-age=86400
+
 # Global default security & performance headers
 /*
   X-Content-Type-Options: nosniff

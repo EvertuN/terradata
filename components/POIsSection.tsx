@@ -2,13 +2,13 @@ import React from 'react';
 import {
   View,
   Text,
-  Image,
   TouchableOpacity,
   StyleSheet,
   Linking,
 } from 'react-native';
 import { Landmark, ExternalLink, Star } from 'lucide-react';
 import { PointOfInterest } from '../types';
+import { LazyImage } from './LazyImage';
 
 interface POIsSectionProps {
   pois: PointOfInterest[];
@@ -54,7 +54,7 @@ export const POIsSection: React.FC<POIsSectionProps> = ({ pois, theme }) => {
                 {/* Real photo from Wikipedia/Wikidata (only rendered if it exists) */}
                 {poi.thumbnail ? (
                   <View style={styles.imageContainer}>
-                    <Image source={{ uri: poi.thumbnail }} style={styles.image} resizeMode="cover" />
+                    <LazyImage src={poi.thumbnail} alt={poi.title} />
 
                     {/* Category Badge on photo */}
                     {poi.category && (

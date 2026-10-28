@@ -11,6 +11,21 @@ interface InteractiveMapProps {
   theme: 'dark' | 'light';
 }
 
+/**
+ * Leaflet's stylesheet is only needed once the map is rendered. Loading it here
+ * (instead of a render-blocking <link> in _document) keeps the landing screen
+ * free of a third-party CSS request.
+ */
+function ensureLeafletStyles(): void {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById('leaflet-styles')) return;
+  const link = document.createElement('link');
+  link.id = 'leaflet-styles';
+  link.rel = 'stylesheet';
+  link.href = '/leaflet.css';
+  document.head.appendChild(link);
+}
+
 export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   city,
   pois,
@@ -68,6 +83,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     let localMap: any = null;
 
     const initMap = async () => {
+      ensureLeafletStyles();
       const L = (await import('leaflet')).default;
       if (!isMounted || !mapContainerRef.current) return;
 

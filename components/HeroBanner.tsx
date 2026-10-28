@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  Image,
   TouchableOpacity,
   StyleSheet,
   Linking,
@@ -16,19 +15,17 @@ import {
   Copy,
   Check,
   MapPin,
-  Heart,
   Camera,
 } from 'lucide-react';
 import { City, CitySummary } from '../types';
 import { formatNumberBR } from '../services/utils';
+import { LazyImage } from './LazyImage';
 
 interface HeroBannerProps {
   city: City;
   summary: CitySummary | null;
   theme: 'dark' | 'light';
   onNotify?: (message: string, type: 'info' | 'success' | 'warning' | 'error') => void;
-  isFavorite?: boolean;
-  onToggleFavorite?: () => void;
   onOpenSnapshot?: () => void;
 }
 
@@ -37,8 +34,6 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   summary,
   theme,
   onNotify,
-  isFavorite = false,
-  onToggleFavorite,
   onOpenSnapshot,
 }) => {
   const [currentTime, setCurrentTime] = useState<string>('');
@@ -111,35 +106,6 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
                 {currentTime || '--:--'}
               </Text>
             </View>
-
-            {/* Favorite Pill Button */}
-            {onToggleFavorite && (
-              <TouchableOpacity
-                style={[
-                  styles.actionPill,
-                  isDark ? styles.actionPillDark : styles.actionPillLight,
-                  isFavorite && (isDark ? styles.actionPillFavDark : styles.actionPillFavLight),
-                ]}
-                onPress={onToggleFavorite}
-                activeOpacity={0.7}
-              >
-                <Heart
-                  size={12}
-                  color={isFavorite ? '#f43f5e' : (isDark ? '#a1a1a6' : '#86868b')}
-                  fill={isFavorite ? '#f43f5e' : 'none'}
-                />
-                <Text
-                  style={[
-                    styles.actionPillText,
-                    isFavorite
-                      ? styles.actionPillFavText
-                      : (isDark ? styles.textSecondaryDark : styles.textSecondaryLight),
-                  ]}
-                >
-                  {isFavorite ? 'Salva' : 'Salvar'}
-                </Text>
-              </TouchableOpacity>
-            )}
 
             {/* Snapshot Story Button */}
             {onOpenSnapshot && (
@@ -229,7 +195,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
         {/* Right Column: Refined City Photograph */}
         {photoUrl ? (
           <View style={styles.photoContainer}>
-            <Image source={{ uri: photoUrl }} style={styles.cityPhoto} resizeMode="cover" />
+            <LazyImage src={photoUrl} alt={city.name} eager />
           </View>
         ) : null}
       </View>
@@ -328,18 +294,9 @@ const styles = StyleSheet.create({
   actionPillDark: {
     backgroundColor: '#2c2c2e',
   },
-  actionPillFavLight: {
-    backgroundColor: '#fff1f2',
-  },
-  actionPillFavDark: {
-    backgroundColor: 'rgba(244, 63, 94, 0.15)',
-  },
   actionPillText: {
     fontSize: 12,
     fontWeight: '600',
-  },
-  actionPillFavText: {
-    color: '#f43f5e',
   },
   cityName: {
     fontSize: 34,
