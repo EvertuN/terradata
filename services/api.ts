@@ -1,44 +1,128 @@
 import { City, WeatherData, AirQualityData, CitySummary, PointOfInterest, NearbyCity } from '../types';
 import { Cache, CACHE_TTL, normalizeCoords } from './cache';
+import { searchLocalFuzzyCities, normalizeCityName } from './fuzzySearch';
 
 export const ApiService = {
   /**
-   * Search cities using Open-Meteo Geocoding API (APIS.md Line 2658)
+   * Search cities using Open-Meteo Geocoding API + Local Brazilian & World Cities Database
+   * with typo tolerance and fuzzy matching (e.g., "Arque" -> "Ariquemes", "Florianopois", etc.)
    */
   async searchCities(query: string): Promise<City[]> {
     if (!query || query.trim().length < 2) return [];
-    const normalized = query.trim().toLowerCase();
+    const normalized = normalizeCityName(query);
     const cacheKey = `search_${normalized}`;
 
     return Cache.fetchWithCache(
       cacheKey,
       CACHE_TTL.CITY_SEARCH,
       async () => {
-        const encoded = encodeURIComponent(query.trim());
+        const rawQuery = query.trim();
+        const encoded = encodeURIComponent(rawQuery);
         const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encoded}&count=10&language=pt&format=json`;
 
+        // 1. Run local fuzzy search on our indexed city database (instant offline/fast)
+        const localMatches = searchLocalFuzzyCities(rawQuery, 8);
+
+        // 2. Fetch Open-Meteo in parallel
+        let openMeteoCities: City[] = [];
         try {
           const res = await fetch(url);
-          if (!res.ok) return [];
-          const data = await res.json();
-          if (!data || !data.results) return [];
-
-          return data.results.map((c: any) => ({
-            id: c.id,
-            name: c.name,
-            latitude: c.latitude,
-            longitude: c.longitude,
-            elevation: c.elevation || 0,
-            country: c.country || '',
-            countryCode: (c.country_code || '').toLowerCase(),
-            admin1: c.admin1 || '',
-            timezone: c.timezone || 'UTC',
-            population: c.population || 0
-          }));
+          if (res.ok) {
+            const data = await res.json();
+            if (data && Array.isArray(data.results)) {
+              openMeteoCities = data.results.map((c: any) => ({
+                id: c.id,
+                name: c.name,
+                latitude: c.latitude,
+                longitude: c.longitude,
+                elevation: c.elevation || 0,
+                country: c.country || '',
+                countryCode: (c.country_code || '').toLowerCase(),
+                admin1: c.admin1 || '',
+                timezone: c.timezone || 'UTC',
+                population: c.population || 0
+              }));
+            }
+          }
         } catch (err) {
-          console.error('Error searchCities:', err);
-          return [];
+          console.warn('Open-Meteo search error:', err);
         }
+
+        // 3. Score and merge all candidates with relevance ranking
+        interface ScoredCandidate {
+          city: City;
+          relevance: number;
+        }
+
+        const candidates: ScoredCandidate[] = [];
+        const seenKeys = new Set<string>();
+
+        const getCityKey = (c: City) =>
+          `${normalizeCityName(c.name)}|${(c.admin1 || '').toLowerCase()}|${(c.countryCode || '').toLowerCase()}`;
+
+        // Add local database matches (Brazil municipalities + top world cities)
+        for (const item of localMatches) {
+          const key = getCityKey(item.city);
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            let rel = item.score;
+
+            if (item.score >= 1000) {
+              // Exact match from local database
+              rel = 2000;
+            } else {
+              // Boost Brazilian cities in Portuguese locale
+              if (item.city.countryCode === 'br') rel += 200;
+              if (item.city.isCapital) rel += 50;
+            }
+
+            candidates.push({ city: item.city, relevance: rel });
+          }
+        }
+
+        // Add Open-Meteo results
+        for (const c of openMeteoCities) {
+          const key = getCityKey(c);
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            const cNorm = normalizeCityName(c.name);
+            let rel = 300;
+
+            if (cNorm === normalized) {
+              // Exact name match:
+              // Brazilian cities or major global cities get high exact priority
+              if (c.countryCode === 'br') {
+                rel = 2000;
+              } else if (c.population > 20000 || c.id === 2988507 /* Paris */ || c.timezone.startsWith('Europe/') || c.timezone.startsWith('America/New_York')) {
+                rel = 1900;
+              } else {
+                // Obscure tiny foreign village (e.g. Arque in Bolivia, pop 1,000)
+                rel = 800;
+              }
+            } else if (cNorm.startsWith(normalized)) {
+              // Prefix match: higher for Brazil or major global cities, lower for tiny foreign villages
+              const ratio = normalized.length / cNorm.length;
+              if (c.countryCode === 'br') {
+                rel = 780 + ratio * 100;
+              } else if (c.population > 50000) {
+                rel = 720 + ratio * 80;
+              } else {
+                rel = 500 + ratio * 50;
+              }
+            }
+
+            if (c.countryCode === 'br') rel += 80;
+            if (c.population > 1000000) rel += 80;
+            else if (c.population > 100000) rel += 40;
+
+            candidates.push({ city: c, relevance: rel });
+          }
+        }
+
+        // Sort descending by relevance
+        candidates.sort((a, b) => b.relevance - a.relevance);
+
+        return candidates.slice(0, 10).map(c => c.city);
       },
       (res) => Array.isArray(res) && res.length > 0
     );

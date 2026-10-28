@@ -9,6 +9,9 @@ export interface City {
   admin1: string;
   timezone: string;
   population: number;
+  isCapital?: boolean;
+  isFuzzy?: boolean;
+  fuzzyMatchedFrom?: string;
 }
 
 export interface CurrentWeather {

@@ -4,6 +4,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  ScrollView,
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
@@ -17,6 +18,7 @@ import {
   Sun,
   Moon,
   Trash2,
+  Sparkles,
 } from 'lucide-react';
 import { City } from '../types';
 import { ApiService } from '../services/api';
@@ -174,34 +176,47 @@ export const LandingSearch: React.FC<LandingSearchProps> = ({
                 isDark ? styles.dropdownDark : styles.dropdownLight,
               ]}
             >
-              {suggestions.map((city, idx) => (
-                <TouchableOpacity
-                  key={`${city.id}-${idx}`}
-                  style={[
-                    styles.dropdownItem,
-                    isDark ? styles.dropdownItemDark : styles.dropdownItemLight,
-                  ]}
-                  onPress={() => handleSelectSuggestion(city)}
-                  activeOpacity={0.65}
-                >
-                  <View style={[styles.pinCircle, isDark ? styles.pinCircleDark : styles.pinCircleLight]}>
-                    <MapPin size={13} color={isDark ? '#64b5f6' : '#0071e3'} />
-                  </View>
-                  <View style={styles.dropdownInfo}>
-                    <Text
-                      style={[
-                        styles.dropdownCityName,
-                        isDark ? styles.textPrimaryDark : styles.textPrimaryLight,
-                      ]}
-                    >
-                      {city.name}
-                    </Text>
-                    <Text style={[styles.dropdownSubtext, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
-                      {[city.admin1, city.country].filter(Boolean).join(' • ')}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
+              <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                {suggestions.map((city, idx) => (
+                  <TouchableOpacity
+                    key={`${city.id}-${idx}`}
+                    style={[
+                      styles.dropdownItem,
+                      isDark ? styles.dropdownItemDark : styles.dropdownItemLight,
+                    ]}
+                    onPress={() => handleSelectSuggestion(city)}
+                    activeOpacity={0.65}
+                  >
+                    <View style={[styles.pinCircle, isDark ? styles.pinCircleDark : styles.pinCircleLight]}>
+                      <MapPin size={13} color={isDark ? '#64b5f6' : '#0071e3'} />
+                    </View>
+                    <View style={styles.dropdownInfo}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <Text
+                          style={[
+                            styles.dropdownCityName,
+                            isDark ? styles.textPrimaryDark : styles.textPrimaryLight,
+                          ]}
+                        >
+                          {city.name}
+                        </Text>
+                        {city.isFuzzy && (
+                          <View style={[styles.fuzzyBadge, isDark ? styles.fuzzyBadgeDark : styles.fuzzyBadgeLight]}>
+                            <Sparkles size={9} color={isDark ? '#64b5f6' : '#0071e3'} />
+                            <Text style={[styles.fuzzyBadgeText, isDark ? styles.fuzzyBadgeTextDark : styles.fuzzyBadgeTextLight]}>
+                              Aproximado
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={[styles.dropdownSubtext, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
+                        {[city.admin1, city.country].filter(Boolean).join(' • ')}
+                        {city.isFuzzy && city.fuzzyMatchedFrom ? ` • Sugestão para "${city.fuzzyMatchedFrom}"` : ''}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             </View>
           )}
         </View>
@@ -465,6 +480,30 @@ const styles = StyleSheet.create({
   dropdownSubtext: {
     fontSize: 12,
     marginTop: 2,
+  },
+  fuzzyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  fuzzyBadgeLight: {
+    backgroundColor: 'rgba(0, 113, 227, 0.08)',
+  },
+  fuzzyBadgeDark: {
+    backgroundColor: 'rgba(100, 181, 246, 0.15)',
+  },
+  fuzzyBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  fuzzyBadgeTextLight: {
+    color: '#0071e3',
+  },
+  fuzzyBadgeTextDark: {
+    color: '#64b5f6',
   },
   gpsActionBtn: {
     flexDirection: 'row',
