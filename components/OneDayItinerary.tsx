@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, Linking } from 'react-native';
-import { Compass, ExternalLink, MapPin, Camera } from 'lucide-react';
+import { Compass, ExternalLink, MapPin } from 'lucide-react';
 import { City, PointOfInterest } from '../types';
 
 interface OneDayItineraryProps {
@@ -178,6 +178,7 @@ export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({ city, pois, th
 
     const buildMapsUrl = (p: PointOfInterest) =>
       p.mapsUrl ||
+      p.url ||
       `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.title + ' ' + city.name)}`;
 
     return [
@@ -281,7 +282,7 @@ export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({ city, pois, th
                 {idx < stops.length - 1 && <View style={[styles.connectorLine, isDark ? styles.lineDark : styles.lineLight]} />}
               </View>
 
-              {/* Stop Card */}
+              {/* Stop Card: Clean & Adaptive */}
               <View style={[styles.stopCard, isDark ? styles.stopCardDark : styles.stopCardLight]}>
                 <View style={styles.stopContent}>
                   <View style={styles.stopHeader}>
@@ -318,30 +319,16 @@ export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({ city, pois, th
                     <TouchableOpacity
                       onPress={() => Linking.openURL(stop.mapsUrl)}
                       activeOpacity={0.65}
-                      style={styles.mapsLinkRow}
                     >
-                      <Text style={styles.detailsLink}>Ver fotos no Google Maps</Text>
-                      <ExternalLink size={10} color="#0071e3" />
+                      <Text style={styles.detailsLink}>Ver no mapa →</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
 
-                {/* Real Photo or Direct Google Maps Photos Card (No fake stock images) */}
+                {/* Real photo: rendered ONLY if available, otherwise card adapts compactly */}
                 {stop.poi.thumbnail ? (
                   <Image source={{ uri: stop.poi.thumbnail }} style={styles.stopPhoto} resizeMode="cover" />
-                ) : (
-                  <TouchableOpacity
-                    style={[styles.mapsPhotoCard, isDark ? styles.mapsPhotoCardDark : styles.mapsPhotoCardLight]}
-                    onPress={() => Linking.openURL(stop.mapsUrl)}
-                    activeOpacity={0.75}
-                  >
-                    <Camera size={18} color={isDark ? '#64b5f6' : '#0071e3'} />
-                    <Text style={[styles.mapsPhotoText, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
-                      Fotos no Maps
-                    </Text>
-                    <ExternalLink size={10} color={isDark ? '#a1a1a6' : '#86868b'} />
-                  </TouchableOpacity>
-                )}
+                ) : null}
               </View>
             </View>
           ))}
@@ -506,8 +493,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: 4,
-    flexWrap: 'wrap',
-    gap: 6,
   },
   categoryPill: {
     flexDirection: 'row',
@@ -518,11 +503,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#86868b',
   },
-  mapsLinkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
   detailsLink: {
     fontSize: 11,
     color: '#0071e3',
@@ -532,30 +512,6 @@ const styles = StyleSheet.create({
     width: 80,
     height: 74,
     borderRadius: 12,
-  },
-  mapsPhotoCard: {
-    width: 80,
-    height: 74,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 6,
-    gap: 4,
-    borderWidth: 1,
-  },
-  mapsPhotoCardLight: {
-    backgroundColor: '#eef5ff',
-    borderColor: 'rgba(0, 113, 227, 0.15)',
-  },
-  mapsPhotoCardDark: {
-    backgroundColor: 'rgba(10, 132, 255, 0.12)',
-    borderColor: 'rgba(100, 181, 246, 0.2)',
-  },
-  mapsPhotoText: {
-    fontSize: 9,
-    fontWeight: '700',
-    textAlign: 'center',
-    lineHeight: 11,
   },
   textPrimaryLight: {
     color: '#1d1d1f',

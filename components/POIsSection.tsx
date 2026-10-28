@@ -7,7 +7,7 @@ import {
   StyleSheet,
   Linking,
 } from 'react-native';
-import { Landmark, ExternalLink, Star, Camera } from 'lucide-react';
+import { Landmark, ExternalLink, Star } from 'lucide-react';
 import { PointOfInterest } from '../types';
 
 interface POIsSectionProps {
@@ -51,39 +51,43 @@ export const POIsSection: React.FC<POIsSectionProps> = ({ pois, theme }) => {
                 key={`${poi.pageId}-${idx}`}
                 style={[styles.poiCard, isDark ? styles.poiCardDark : styles.poiCardLight]}
               >
-                {/* Photo: Real photo from Wikipedia/Wikidata or Direct Google Maps Photos Action */}
-                <View style={styles.imageContainer}>
-                  {poi.thumbnail ? (
+                {/* Real photo from Wikipedia/Wikidata (only rendered if it exists) */}
+                {poi.thumbnail ? (
+                  <View style={styles.imageContainer}>
                     <Image source={{ uri: poi.thumbnail }} style={styles.image} resizeMode="cover" />
-                  ) : (
-                    <TouchableOpacity
-                      style={[styles.placeholderImage, isDark ? styles.placeholderDark : styles.placeholderLight]}
-                      onPress={() => Linking.openURL(mapsUrl)}
-                      activeOpacity={0.75}
-                    >
-                      <Camera size={24} color={isDark ? '#64b5f6' : '#0071e3'} />
-                      <Text style={[styles.mapsBtnText, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
-                        Ver fotos no Google Maps
-                      </Text>
-                      <ExternalLink size={12} color={isDark ? '#64b5f6' : '#0071e3'} />
-                    </TouchableOpacity>
-                  )}
 
-                  {/* Category Badge */}
-                  {poi.category && (
-                    <View style={styles.categoryBadge}>
-                      <Text style={styles.categoryText}>{poi.category}</Text>
+                    {/* Category Badge on photo */}
+                    {poi.category && (
+                      <View style={styles.categoryBadge}>
+                        <Text style={styles.categoryText}>{poi.category}</Text>
+                      </View>
+                    )}
+
+                    {/* Distance Badge on photo */}
+                    <View style={styles.distanceBadge}>
+                      <Text style={styles.distanceText}>{poi.distFormatted}</Text>
                     </View>
-                  )}
-
-                  {/* Distance Badge in Soft Apple Blur style */}
-                  <View style={styles.distanceBadge}>
-                    <Text style={styles.distanceText}>{poi.distFormatted}</Text>
                   </View>
-                </View>
+                ) : null}
 
-                {/* Body */}
+                {/* Body: Adapts cleanly whether there's a photo or not */}
                 <View style={styles.infoBody}>
+                  {/* Inline header for cards without a photo banner */}
+                  {!poi.thumbnail ? (
+                    <View style={styles.inlineHeaderRow}>
+                      {poi.category ? (
+                        <View style={[styles.inlineCategoryBadge, isDark ? styles.inlineBadgeDark : styles.inlineBadgeLight]}>
+                          <Text style={[styles.inlineCategoryText, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
+                            {poi.category}
+                          </Text>
+                        </View>
+                      ) : null}
+                      <Text style={[styles.inlineDistanceText, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
+                        {poi.distFormatted}
+                      </Text>
+                    </View>
+                  ) : null}
+
                   {/* Rating & Reviews */}
                   <View style={styles.ratingRow}>
                     <Star size={13} color="#f59e0b" fill="#f59e0b" />
@@ -115,7 +119,7 @@ export const POIsSection: React.FC<POIsSectionProps> = ({ pois, theme }) => {
                     activeOpacity={0.7}
                   >
                     <Text style={[styles.actionText, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
-                      Ver no Google Maps
+                      Ver no mapa
                     </Text>
                     <ExternalLink size={11} color={isDark ? '#64b5f6' : '#0071e3'} />
                   </TouchableOpacity>
@@ -218,25 +222,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  placeholderImage: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    gap: 8,
-  },
-  placeholderLight: {
-    backgroundColor: '#f5f8ff',
-  },
-  placeholderDark: {
-    backgroundColor: '#1a2233',
-  },
-  mapsBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
   categoryBadge: {
     position: 'absolute',
     top: 10,
@@ -269,6 +254,32 @@ const styles = StyleSheet.create({
   infoBody: {
     padding: 14,
     gap: 6,
+  },
+  inlineHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  inlineCategoryBadge: {
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  inlineBadgeLight: {
+    backgroundColor: '#f0f0f2',
+  },
+  inlineBadgeDark: {
+    backgroundColor: '#3a3a3c',
+  },
+  inlineCategoryText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  inlineDistanceText: {
+    fontSize: 11,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
   },
   ratingRow: {
     flexDirection: 'row',
