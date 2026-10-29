@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { X, Download, Copy, Check, Globe2, Sparkles, Wind } from 'lucide-react';
 import { City, WeatherData, AirQualityData, CitySummary } from '../types';
@@ -28,7 +28,21 @@ export const SnapshotModal: React.FC<SnapshotModalProps> = ({
 }) => {
   const [isExporting, setIsExporting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [siteWatermark, setSiteWatermark] = useState<string>('TerraData');
   const isDark = theme === 'dark';
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location) {
+      const hostname = window.location.hostname;
+      const host = window.location.host;
+      // Usa o domínio/host se estiver em produção; se for localhost, IP privado ou indefinido, fallback para 'TerraData'
+      if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1' && !hostname.startsWith('192.168.')) {
+        setSiteWatermark(host || hostname);
+      } else {
+        setSiteWatermark('TerraData');
+      }
+    }
+  }, []);
 
   const photoUrl = summary?.bannerImage || summary?.thumbnail;
   const temp = weather?.current?.temperature ?? 24;
@@ -131,9 +145,10 @@ export const SnapshotModal: React.FC<SnapshotModalProps> = ({
       }
 
       // 8. Footer Watermark
+      const watermark = siteWatermark || 'TerraData';
       ctx.font = '500 24px -apple-system, sans-serif';
       ctx.fillStyle = '#6e6e73';
-      ctx.fillText('terradata.app • Geointeligência & Meteorologia', 80, 1830);
+      ctx.fillText(`${watermark} • Geointeligência & Meteorologia`, 80, 1830);
 
       // Export canvas to download
       const dataUrl = canvas.toDataURL('image/png');
@@ -223,7 +238,7 @@ export const SnapshotModal: React.FC<SnapshotModalProps> = ({
                   </Text>
                 ) : null}
 
-                <Text style={styles.storyWatermark}>terradata.app</Text>
+                <Text style={styles.storyWatermark}>{siteWatermark || 'TerraData'}</Text>
               </View>
             </View>
           </View>
