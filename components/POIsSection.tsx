@@ -40,17 +40,41 @@ export const POIsSection: React.FC<POIsSectionProps> = ({ pois, theme }) => {
 
         {/* POI Clean Cards Grid */}
         <View style={styles.grid}>
-          {pois.map((poi, idx) => {
-            const mapsUrl =
-              poi.mapsUrl ||
-              poi.url ||
-              `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(poi.title)}`;
-
-            return (
+          {pois.length === 0 ? (
+            Array.from({ length: 4 }).map((_, idx) => (
               <View
-                key={`${poi.pageId}-${idx}`}
-                style={[styles.poiCard, isDark ? styles.poiCardDark : styles.poiCardLight]}
+                key={idx}
+                style={[styles.poiCard, isDark ? styles.poiCardDark : styles.poiCardLight, { padding: 14, minHeight: 180 }]}
               >
+                <div
+                  className={`td-skeleton-box ${isDark ? 'td-skeleton-dark' : 'td-skeleton-light'}`}
+                  data-skeleton="true"
+                  style={{ width: '100%', height: 110, borderRadius: 12, marginBottom: 12 }}
+                />
+                <div
+                  className={`td-skeleton-box ${isDark ? 'td-skeleton-dark' : 'td-skeleton-light'}`}
+                  data-skeleton="true"
+                  style={{ width: '70%', height: 16, borderRadius: 6, marginBottom: 8 }}
+                />
+                <div
+                  className={`td-skeleton-box ${isDark ? 'td-skeleton-dark' : 'td-skeleton-light'}`}
+                  data-skeleton="true"
+                  style={{ width: '40%', height: 12, borderRadius: 4 }}
+                />
+              </View>
+            ))
+          ) : (
+            pois.map((poi, idx) => {
+              const mapsUrl =
+                poi.mapsUrl ||
+                poi.url ||
+                `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(poi.title)}`;
+
+              return (
+                <View
+                  key={`${poi.pageId}-${idx}`}
+                  style={[styles.poiCard, isDark ? styles.poiCardDark : styles.poiCardLight]}
+                >
                 {/* Real photo from Wikipedia/Wikidata (only rendered if it exists) */}
                 {poi.thumbnail ? (
                   <View style={styles.imageContainer}>
@@ -126,7 +150,7 @@ export const POIsSection: React.FC<POIsSectionProps> = ({ pois, theme }) => {
                 </View>
               </View>
             );
-          })}
+          }))}
         </View>
       </View>
     </View>

@@ -150,7 +150,7 @@ export default function HomePage() {
     }
   }, [handleSelectCity]);
 
-  // Main data fetch orchestrator with Promise.allSettled and race-condition guard
+  // Main progressive data fetch orchestrator with race-condition guard
   const loadCityData = useCallback(
     async (city: City) => {
       activeCityIdRef.current = city.id;
@@ -160,39 +160,66 @@ export default function HomePage() {
       setCitySummary(null);
       setPois([]);
       setNearbyCities([]);
+
+      // 1. Weather: Core requirement to unveil the dashboard (~200ms)
+      const weatherReq = ApiService.getWeather(city.latitude, city.longitude)
+        .then((data) => {
+          if (activeCityIdRef.current === city.id && data) {
+            setWeather(data);
+            setIsLoading(false); // Unblock skeleton immediately when core weather arrives!
+          }
+          return data;
+        })
+        .catch((err) => {
+          console.warn('Weather fetch error:', err);
+          return null;
+        });
+
+      // 2. Air Quality (~200ms)
+      const airReq = ApiService.getAirQuality(city.latitude, city.longitude)
+        .then((data) => {
+          if (activeCityIdRef.current === city.id && data) {
+            setAirQuality(data);
+          }
+          return data;
+        })
+        .catch(() => null);
+
+      // 3. Wikipedia Summary & Photo (~400ms)
+      const wikiReq = ApiService.getCitySummary(city.name, city.admin1)
+        .then((data) => {
+          if (activeCityIdRef.current === city.id && data) {
+            setCitySummary(data);
+          }
+          return data;
+        })
+        .catch(() => null);
+
+      // 4. Wikidata POIs (1-3s, async progressive)
+      const poisReq = ApiService.getNearbyPOIs(city.latitude, city.longitude, 12, city.name, city.admin1)
+        .then((data) => {
+          if (activeCityIdRef.current === city.id && data) {
+            setPois(data);
+          }
+          return data;
+        })
+        .catch(() => null);
+
+      // 5. Nearby Cities (~500ms)
+      const nearbyReq = ApiService.getNearbyCities(city.latitude, city.longitude, city.name, city.admin1, city.country)
+        .then((data) => {
+          if (activeCityIdRef.current === city.id && data) {
+            setNearbyCities(data);
+          }
+          return data;
+        })
+        .catch(() => null);
+
       try {
-        const [resWeather, resAir, resWiki, resPois, resNearby] = await Promise.allSettled([
-          ApiService.getWeather(city.latitude, city.longitude),
-          ApiService.getAirQuality(city.latitude, city.longitude),
-          ApiService.getCitySummary(city.name, city.admin1),
-          ApiService.getNearbyPOIs(city.latitude, city.longitude, 12, city.name, city.admin1),
-          ApiService.getNearbyCities(city.latitude, city.longitude, city.name, city.admin1, city.country),
-        ]);
-
-        // Discard stale data if another city was selected while requests were in flight
-        if (activeCityIdRef.current !== city.id) {
-          return;
-        }
-
-        if (resWeather.status === 'fulfilled' && resWeather.value) {
-          setWeather(resWeather.value);
-        }
-        if (resAir.status === 'fulfilled' && resAir.value) {
-          setAirQuality(resAir.value);
-        }
-        if (resWiki.status === 'fulfilled' && resWiki.value) {
-          setCitySummary(resWiki.value);
-        }
-        if (resPois.status === 'fulfilled' && resPois.value) {
-          setPois(resPois.value);
-        }
-        if (resNearby.status === 'fulfilled' && resNearby.value) {
-          setNearbyCities(resNearby.value);
-        }
+        await Promise.allSettled([weatherReq, airReq, wikiReq, poisReq, nearbyReq]);
       } catch (err) {
         if (activeCityIdRef.current === city.id) {
           console.error('Error loading city data:', err);
-          showToast('Não foi possível sincronizar todos os dados', 'warning');
         }
       } finally {
         if (activeCityIdRef.current === city.id) {

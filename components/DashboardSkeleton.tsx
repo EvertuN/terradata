@@ -10,13 +10,14 @@ const SkeletonBox: React.FC<{
   isDark: boolean;
   style?: any;
 }> = ({ isDark, style }) => (
-  <View
-    style={[
-      styles.skeletonBase,
-      isDark ? styles.skeletonDark : styles.skeletonLight,
-      style,
-    ]}
-    {...({ className: 'td-skeleton-box' } as any)}
+  <div
+    className={`td-skeleton-box ${isDark ? 'td-skeleton-dark' : 'td-skeleton-light'}`}
+    data-skeleton="true"
+    style={{
+      display: 'block',
+      boxSizing: 'border-box',
+      ...style,
+    }}
   />
 );
 

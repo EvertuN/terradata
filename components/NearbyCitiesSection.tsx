@@ -60,7 +60,26 @@ export const NearbyCitiesSection: React.FC<NearbyCitiesSectionProps> = ({
 
         {/* Nearby Cities Grid */}
         <View style={styles.grid}>
-          {cities.map((city, idx) => (
+          {cities.length === 0 ? (
+            Array.from({ length: 4 }).map((_, idx) => (
+              <View
+                key={idx}
+                style={[styles.cityCard, isDark ? styles.cityCardDark : styles.cityCardLight, { padding: 16 }]}
+              >
+                <div
+                  className={`td-skeleton-box ${isDark ? 'td-skeleton-dark' : 'td-skeleton-light'}`}
+                  data-skeleton="true"
+                  style={{ width: '60%', height: 16, borderRadius: 6, marginBottom: 8 }}
+                />
+                <div
+                  className={`td-skeleton-box ${isDark ? 'td-skeleton-dark' : 'td-skeleton-light'}`}
+                  data-skeleton="true"
+                  style={{ width: '40%', height: 12, borderRadius: 4 }}
+                />
+              </View>
+            ))
+          ) : (
+            cities.map((city, idx) => (
             <View
               key={`${city.name}-${idx}`}
               style={[styles.cityCard, isDark ? styles.cityCardDark : styles.cityCardLight]}
@@ -108,7 +127,7 @@ export const NearbyCitiesSection: React.FC<NearbyCitiesSectionProps> = ({
                 </TouchableOpacity>
               </View>
             </View>
-          ))}
+          )))}
         </View>
       </View>
     </View>

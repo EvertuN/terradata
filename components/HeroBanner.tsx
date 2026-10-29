@@ -135,6 +135,19 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
             >
               {summary.extract}
             </Text>
+          ) : !summary ? (
+            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div
+                className={`td-skeleton-box ${isDark ? 'td-skeleton-dark' : 'td-skeleton-light'}`}
+                data-skeleton="true"
+                style={{ width: '85%', height: 14, borderRadius: 6 }}
+              />
+              <div
+                className={`td-skeleton-box ${isDark ? 'td-skeleton-dark' : 'td-skeleton-light'}`}
+                data-skeleton="true"
+                style={{ width: '60%', height: 14, borderRadius: 6 }}
+              />
+            </div>
           ) : null}
 
           {/* Clean Editorial Stats Strip (Anti-AI-Slop: No Pill Soup) */}
@@ -197,6 +210,12 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
           <View style={styles.photoContainer}>
             <LazyImage src={photoUrl} alt={city.name} eager />
           </View>
+        ) : !summary ? (
+          <div
+            className={`td-skeleton-box ${isDark ? 'td-skeleton-dark' : 'td-skeleton-light'}`}
+            data-skeleton="true"
+            style={{ width: 220, height: 140, borderRadius: 18 }}
+          />
         ) : null}
       </View>
     </View>

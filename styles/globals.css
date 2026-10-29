@@ -242,20 +242,58 @@ button:focus-visible {
 /* ==========================================================================
    TerraData Skeleton Shimmer System (YouTube / Apple Style)
    ========================================================================== */
-@keyframes td-skeleton-pulse {
+@keyframes td-skeleton-shimmer {
   0% {
-    opacity: 0.55;
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes td-skeleton-pulse {
+  0%, 100% {
+    opacity: 0.8;
   }
   50% {
     opacity: 1;
   }
-  100% {
-    opacity: 0.55;
-  }
 }
 
-.td-skeleton-box {
-  animation: td-skeleton-pulse 1.4s ease-in-out infinite !important;
+.td-skeleton-box,
+[data-skeleton="true"] {
+  position: relative;
+  overflow: hidden;
+  will-change: background-position, opacity;
+}
+
+.td-skeleton-light,
+.td-skeleton-box.td-skeleton-light,
+[data-skeleton="true"]:not(.td-skeleton-dark) {
+  background: linear-gradient(
+    90deg,
+    #e8e8ed 0%,
+    #e8e8ed 20%,
+    #f8f8fa 50%,
+    #e8e8ed 80%,
+    #e8e8ed 100%
+  ) !important;
+  background-size: 200% 100% !important;
+  animation: td-skeleton-shimmer 1.5s ease-in-out infinite, td-skeleton-pulse 1.5s ease-in-out infinite !important;
+}
+
+.td-skeleton-dark,
+.td-skeleton-box.td-skeleton-dark {
+  background: linear-gradient(
+    90deg,
+    #242426 0%,
+    #242426 20%,
+    #38383e 50%,
+    #242426 80%,
+    #242426 100%
+  ) !important;
+  background-size: 200% 100% !important;
+  animation: td-skeleton-shimmer 1.5s ease-in-out infinite, td-skeleton-pulse 1.5s ease-in-out infinite !important;
 }
 
 /* Gradients for AQI & Radar strips */
