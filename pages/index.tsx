@@ -36,6 +36,7 @@ import { InteractiveMap } from '../components/InteractiveMap';
 import { SmartDayInsights } from '../components/SmartDayInsights';
 import { OneDayItinerary } from '../components/OneDayItinerary';
 import { SnapshotModal } from '../components/SnapshotModal';
+import { DashboardSkeleton } from '../components/DashboardSkeleton';
 import { Toast, ToastProps } from '../components/Toast';
 
 export default function HomePage() {
@@ -154,6 +155,11 @@ export default function HomePage() {
     async (city: City) => {
       activeCityIdRef.current = city.id;
       setIsLoading(true);
+      setWeather(null);
+      setAirQuality(null);
+      setCitySummary(null);
+      setPois([]);
+      setNearbyCities([]);
       try {
         const [resWeather, resAir, resWiki, resPois, resNearby] = await Promise.allSettled([
           ApiService.getWeather(city.latitude, city.longitude),
@@ -281,30 +287,6 @@ export default function HomePage() {
     );
   }
 
-  // 2. Full-Screen Minimalist Loader Screen (Pure loading, zero fixed or stale items)
-  if (isLoading || !weather) {
-    return (
-      <View style={[styles.rootContainer, styles.loaderContainer, isDark ? styles.rootDark : styles.rootLight]}>
-        <View style={[styles.loaderCard, isDark ? styles.loaderCardDark : styles.loaderCardLight]}>
-          <ActivityIndicator size="large" color={isDark ? '#64b5f6' : '#0071e3'} />
-          <Text style={[styles.loaderTitle, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
-            Carregando {currentCity.name}...
-          </Text>
-          <Text style={[styles.loaderSubtitle, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
-            Sincronizando clima, qualidade do ar, satélite e atrações
-          </Text>
-        </View>
-
-        {toast && (
-          <Toast
-            message={toast.message}
-            type={toast.type}
-            onClose={() => setToast(null)}
-          />
-        )}
-      </View>
-    );
-  }
 
   // 3. City Intelligence Dashboard Screen
   return (
@@ -436,7 +418,7 @@ export default function HomePage() {
                       : (isDark ? styles.textSecondaryDark : styles.textSecondaryLight),
                   ]}
                 >
-                  Atrações ({pois.length})
+                  Atrações{!isLoading && pois.length > 0 ? ` (${pois.length})` : ''}
                 </Text>
               </TouchableOpacity>
 
@@ -457,90 +439,87 @@ export default function HomePage() {
                       : (isDark ? styles.textSecondaryDark : styles.textSecondaryLight),
                   ]}
                 >
-                  Vizinhas ({nearbyCities.length})
+                  Vizinhas{!isLoading && nearbyCities.length > 0 ? ` (${nearbyCities.length})` : ''}
                 </Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
         </View>
 
-        {/* Sync Indicator */}
-        {isLoading && (
-          <View style={[styles.loadingPill, isDark ? styles.loadingPillDark : styles.loadingPillLight]}>
-            <ActivityIndicator size="small" color="#0071e3" />
-            <Text style={[styles.loadingText, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
-              Atualizando dados...
-            </Text>
-          </View>
-        )}
-
-        {/* Hero Section */}
-        <HeroBanner
-          city={currentCity}
-          summary={citySummary}
-          theme={theme}
-          onNotify={showToast}
-          onOpenSnapshot={() => setIsSnapshotOpen(true)}
-        />
-
-        {/* Dynamic Sections Based on Active Tab */}
-        {(activeTab === 'all' || activeTab === 'weather') && (
-          <View style={styles.sectionWrap}>
-            <WeatherSection
-              weather={weather}
-              temperatureUnit={temperatureUnit}
-              theme={theme}
-            />
-            {weather?.hourly && (
-              <HourlyChart
-                hourly={weather.hourly}
-                temperatureUnit={temperatureUnit}
-                theme={theme}
-              />
-            )}
-            <SmartDayInsights weather={weather} theme={theme} />
-          </View>
-        )}
-
-        {(activeTab === 'all' || activeTab === 'air') && (
-          <View style={styles.sectionWrap}>
-            <AirQualitySection airQuality={airQuality} theme={theme} />
-          </View>
-        )}
-
-        {(activeTab === 'all' || activeTab === 'map') && (
-          <View style={styles.sectionWrap}>
-            <InteractiveMap
+        {/* Dynamic Content: Skeleton while loading/empty, Real Content when ready */}
+        {isLoading || !weather ? (
+          <DashboardSkeleton theme={theme} activeTab={activeTab} />
+        ) : (
+          <>
+            {/* Hero Section */}
+            <HeroBanner
               city={currentCity}
-              pois={pois}
-              nearbyCities={nearbyCities}
-              onSelectCity={(nc) => {
-                handleSelectCity(nc);
-                showToast(`${nc.name} selecionada`, 'info');
-              }}
+              summary={citySummary}
               theme={theme}
+              onNotify={showToast}
+              onOpenSnapshot={() => setIsSnapshotOpen(true)}
             />
-          </View>
-        )}
 
-        {(activeTab === 'all' || activeTab === 'pois') && (
-          <View style={styles.sectionWrap}>
-            <POIsSection pois={pois} theme={theme} />
-            <OneDayItinerary city={currentCity} pois={pois} theme={theme} />
-          </View>
-        )}
+            {/* Dynamic Sections Based on Active Tab */}
+            {(activeTab === 'all' || activeTab === 'weather') && (
+              <View style={styles.sectionWrap}>
+                <WeatherSection
+                  weather={weather}
+                  temperatureUnit={temperatureUnit}
+                  theme={theme}
+                />
+                {weather?.hourly && (
+                  <HourlyChart
+                    hourly={weather.hourly}
+                    temperatureUnit={temperatureUnit}
+                    theme={theme}
+                  />
+                )}
+                <SmartDayInsights weather={weather} theme={theme} />
+              </View>
+            )}
 
-        {(activeTab === 'all' || activeTab === 'nearby') && (
-          <View style={styles.sectionWrap}>
-            <NearbyCitiesSection
-              cities={nearbyCities}
-              onSelectCity={(nc) => {
-                handleSelectCity(nc);
-                showToast(`${nc.name} selecionada`, 'info');
-              }}
-              theme={theme}
-            />
-          </View>
+            {(activeTab === 'all' || activeTab === 'air') && (
+              <View style={styles.sectionWrap}>
+                <AirQualitySection airQuality={airQuality} theme={theme} />
+              </View>
+            )}
+
+            {(activeTab === 'all' || activeTab === 'map') && (
+              <View style={styles.sectionWrap}>
+                <InteractiveMap
+                  city={currentCity}
+                  pois={pois}
+                  nearbyCities={nearbyCities}
+                  onSelectCity={(nc) => {
+                    handleSelectCity(nc);
+                    showToast(`${nc.name} selecionada`, 'info');
+                  }}
+                  theme={theme}
+                />
+              </View>
+            )}
+
+            {(activeTab === 'all' || activeTab === 'pois') && (
+              <View style={styles.sectionWrap}>
+                <POIsSection pois={pois} theme={theme} />
+                <OneDayItinerary city={currentCity} pois={pois} theme={theme} />
+              </View>
+            )}
+
+            {(activeTab === 'all' || activeTab === 'nearby') && (
+              <View style={styles.sectionWrap}>
+                <NearbyCitiesSection
+                  cities={nearbyCities}
+                  onSelectCity={(nc) => {
+                    handleSelectCity(nc);
+                    showToast(`${nc.name} selecionada`, 'info');
+                  }}
+                  theme={theme}
+                />
+              </View>
+            )}
+          </>
         )}
 
         {/* Apple Style Legal & Source Notes */}
@@ -589,43 +568,6 @@ const styles = StyleSheet.create({
   },
   rootDark: {
     backgroundColor: '#000000',
-  },
-  loaderContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  loaderCard: {
-    paddingVertical: 36,
-    paddingHorizontal: 32,
-    borderRadius: 24,
-    alignItems: 'center',
-    gap: 16,
-    maxWidth: 380,
-    width: '100%',
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.05,
-    shadowRadius: 24,
-  },
-  loaderCardLight: {
-    backgroundColor: '#ffffff',
-    borderColor: 'rgba(0, 0, 0, 0.05)',
-  },
-  loaderCardDark: {
-    backgroundColor: '#1c1c1e',
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  loaderTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  loaderSubtitle: {
-    fontSize: 12,
-    textAlign: 'center',
-    lineHeight: 18,
   },
   scrollView: {
     flex: 1,
@@ -680,28 +622,6 @@ const styles = StyleSheet.create({
   segmentLabel: {
     fontSize: 12,
     fontWeight: '500',
-  },
-  loadingPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    alignSelf: 'center',
-    paddingVertical: 5,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-  },
-  loadingPillLight: {
-    backgroundColor: '#ffffff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 8,
-  },
-  loadingPillDark: {
-    backgroundColor: '#1c1c1e',
-  },
-  loadingText: {
-    fontSize: 12,
   },
   sectionWrap: {
     width: '100%',

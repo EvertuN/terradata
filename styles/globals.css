@@ -238,3 +238,23 @@ button:focus-visible {
 [data-theme="dark"] .leaflet-tile-pane {
   filter: brightness(0.85) invert(1) contrast(1.05) hue-rotate(180deg);
 }
+
+/* ==========================================================================
+   TerraData Skeleton Shimmer System (YouTube / Apple Style)
+   ========================================================================== */
+@keyframes td-skeleton-pulse {
+  0% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.55;
+  }
+}
+
+.td-skeleton-box {
+  animation: td-skeleton-pulse 1.4s ease-in-out infinite !important;
+}
+
