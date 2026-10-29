@@ -258,3 +258,12 @@ button:focus-visible {
   animation: td-skeleton-pulse 1.4s ease-in-out infinite !important;
 }
 
+/* Gradients for AQI & Radar strips */
+.td-aqi-gradient-bar {
+  background: linear-gradient(to right, #34d399, #facc15, #fb923c, #f87171) !important;
+}
+
+.td-radar-gradient-bar {
+  background: linear-gradient(to right, #00b0ff, #00e676, #ffea00, #ff1744) !important;
+}
+

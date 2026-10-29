@@ -189,20 +189,12 @@ const styles = StyleSheet.create({
   cardLight: {
     backgroundColor: '#ffffff',
     borderColor: 'rgba(0, 0, 0, 0.05)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.035,
-    shadowRadius: 20,
-    elevation: 2,
+    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.035)',
   },
   cardDark: {
     backgroundColor: '#1c1c1e',
     borderColor: 'rgba(255, 255, 255, 0.08)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 24,
-    elevation: 3,
+    boxShadow: '0 4px 24px rgba(0, 0, 0, 0.35)',
   },
   skeletonBase: {
     overflow: 'hidden',

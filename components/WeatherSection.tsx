@@ -332,11 +332,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 24,
     borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.03,
-    shadowRadius: 20,
-    elevation: 3,
+    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)',
   },
   cardLight: {
     backgroundColor: '#ffffff',

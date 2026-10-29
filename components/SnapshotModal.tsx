@@ -277,10 +277,7 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     padding: 20,
     borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.25,
-    shadowRadius: 36,
+    boxShadow: '0 20px 36px rgba(0, 0, 0, 0.25)',
   },
   modalLight: {
     backgroundColor: '#ffffff',
@@ -320,10 +317,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative',
     backgroundColor: '#0a0a0c',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.35,
-    shadowRadius: 24,
+    boxShadow: '0 12px 24px rgba(0, 0, 0, 0.35)',
   },
   cardImage: {
     position: 'absolute',

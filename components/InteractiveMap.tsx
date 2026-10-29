@@ -489,11 +489,11 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
                   Intensidade:
                 </Text>
                 <div
+                  className="td-radar-gradient-bar"
                   style={{
                     width: '54px',
                     height: '6px',
                     borderRadius: '3px',
-                    background: 'linear-gradient(to right, #00b0ff, #00e676, #ffea00, #ff1744)',
                   }}
                 />
               </View>
@@ -513,11 +513,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 24,
     borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.03,
-    shadowRadius: 20,
-    elevation: 3,
+    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)',
   },
   cardLight: {
     backgroundColor: '#ffffff',
@@ -599,10 +595,7 @@ const styles = StyleSheet.create({
   },
   segmentActiveLight: {
     backgroundColor: '#ffffff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
+    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.06)',
   },
   segmentActiveDark: {
     backgroundColor: '#3a3a3c',
@@ -631,10 +624,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     flexWrap: 'wrap',
     gap: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
+    boxShadow: '0 6px 16px rgba(0, 0, 0, 0.15)',
   },
   radarBarLight: {
     backgroundColor: 'rgba(255, 255, 255, 0.92)',

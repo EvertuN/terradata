@@ -81,7 +81,7 @@ export const AirQualitySection: React.FC<AirQualitySectionProps> = ({
 
         {/* Apple Continuous Pastel Gradient Bar */}
         <View style={styles.scaleContainer}>
-          <View style={styles.gradientBar} />
+          <View style={styles.gradientBar} {...({ className: 'td-aqi-gradient-bar' } as any)} />
           <View style={[styles.scalePointer, { left: `${indicatorPercent}%` }]} />
         </View>
 
@@ -144,11 +144,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 24,
     borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.03,
-    shadowRadius: 20,
-    elevation: 3,
+    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)',
   },
   cardLight: {
     backgroundColor: '#ffffff',
@@ -226,10 +222,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 6,
     borderRadius: 3,
-    // Soft continuous pastel spectrum: Green -> Yellow -> Orange -> Pink/Red
     backgroundColor: '#10b981',
-    // @ts-ignore
-    background: 'linear-gradient(to right, #34d399, #facc15, #fb923c, #f87171)',
   },
   scalePointer: {
     position: 'absolute',
@@ -240,10 +233,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderWidth: 2,
     borderColor: '#1d1d1f',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
+    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.15)',
     marginLeft: -7,
   },
   pollutantsGrid: {
