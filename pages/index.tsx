@@ -574,10 +574,10 @@ export default function HomePage() {
           </>
         )}
 
-        {/* Apple Style Legal & Source Notes */}
+        {/* Minimalist Apple Footer */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            TerraData • Dados meteorológicos fornecidos por Open-Meteo • Cartografia por OpenStreetMap • Informações geográficas via GeoDB Cities & Wikipédia
+            TerraData
           </Text>
         </View>
       </ScrollView>

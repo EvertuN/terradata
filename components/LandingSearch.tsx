@@ -291,10 +291,10 @@ export const LandingSearch: React.FC<LandingSearchProps> = ({
         )}
       </View>
 
-      {/* Footer */}
+      {/* Minimalist Footer */}
       <View style={styles.footer}>
         <Text style={[styles.footerText, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
-          TerraData • Dados Geográficos e Meteorológicos em Tempo Real
+          TerraData
         </Text>
       </View>
     </View>
