@@ -32,6 +32,9 @@ lerna-debug.log*
 # Vercel
 .vercel
 
+# Cloudflare Wrangler
+.wrangler/
+
 # Operating System & Editor Files
 .DS_Store
 *.pem

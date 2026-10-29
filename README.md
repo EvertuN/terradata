@@ -1,6 +1,6 @@
 # 🌍 TerraData — Agregador de Cidades Inteligente
 
-> Um agregador moderno e completo de informações urbanas e geográficas, construído com **React Native for Web**, **Next.js 14**, **TypeScript** e **TSX**, alimentado exclusivamente por APIs públicas de alta disponibilidade mapeadas a partir do catálogo [APIS.md](file:///C:/Users/evert_b9ypuj4/Dev/1984/APIS.md).
+> Um agregador moderno e completo de informações urbanas e meteorológicas em tempo real, construído com **React Native for Web**, **Next.js 14**, **TypeScript** e **Cloudflare Workers (Hono Edge BFF)**, alimentado por APIs públicas de alta disponibilidade.
 
 ---
 
@@ -22,7 +22,7 @@
 
 ---
 
-## 🛠️ APIs Utilizadas do [APIS.md](file:///C:/Users/evert_b9ypuj4/Dev/1984/APIS.md)
+## 🛠️ Fontes de Dados e APIs Públicas
 
 1. **[Open-Meteo Geocoding API](https://open-meteo.com/)** (`Linha 2658`): Busca, coordenadas, elevação, fuso horário e população.
 2. **[Open-Meteo Weather Forecast API](https://open-meteo.com/)** (`Linha 2658`): Dados meteorológicos atuais, horários e diários.
