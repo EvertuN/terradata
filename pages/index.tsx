@@ -161,39 +161,64 @@ export default function HomePage() {
       setPois([]);
       setNearbyCities([]);
 
-      // 1. Weather: Core requirement to unveil the dashboard (~200ms)
-      const weatherReq = ApiService.getWeather(city.latitude, city.longitude)
-        .then((data) => {
-          if (activeCityIdRef.current === city.id && data) {
-            setWeather(data);
-            setIsLoading(false); // Unblock skeleton immediately when core weather arrives!
+      // 1. Edge BFF Consolidated Bundle (Weather + Air Quality + Summary in ~15-30ms)
+      const bundleReq = ApiService.getCityBundle(city)
+        .then((bundle) => {
+          if (activeCityIdRef.current === city.id && bundle) {
+            if (bundle.weather) {
+              setWeather(bundle.weather);
+              setIsLoading(false); // Unblock skeleton immediately when bundle arrives!
+            }
+            if (bundle.airQuality) setAirQuality(bundle.airQuality);
+            if (bundle.summary) setCitySummary(bundle.summary);
+            return bundle;
           }
-          return data;
-        })
-        .catch((err) => {
-          console.warn('Weather fetch error:', err);
           return null;
-        });
-
-      // 2. Air Quality (~200ms)
-      const airReq = ApiService.getAirQuality(city.latitude, city.longitude)
-        .then((data) => {
-          if (activeCityIdRef.current === city.id && data) {
-            setAirQuality(data);
-          }
-          return data;
         })
         .catch(() => null);
 
-      // 3. Wikipedia Summary & Photo (~400ms)
-      const wikiReq = ApiService.getCitySummary(city.name, city.admin1)
-        .then((data) => {
-          if (activeCityIdRef.current === city.id && data) {
-            setCitySummary(data);
-          }
-          return data;
-        })
-        .catch(() => null);
+      // Fallback: If bundle is not available, individual requests handle data retrieval
+      const weatherReq = bundleReq.then((bundle) => {
+        if (bundle?.weather) return bundle.weather;
+        return ApiService.getWeather(city.latitude, city.longitude, city.name, city.admin1)
+          .then((data) => {
+            if (activeCityIdRef.current === city.id && data) {
+              setWeather(data);
+              setIsLoading(false);
+            }
+            return data;
+          })
+          .catch((err) => {
+            console.warn('Weather fetch error:', err);
+            return null;
+          });
+      });
+
+      // 2. Air Quality (~200ms or 0ms via bundle)
+      const airReq = bundleReq.then((bundle) => {
+        if (bundle?.airQuality) return bundle.airQuality;
+        return ApiService.getAirQuality(city.latitude, city.longitude, city.name, city.admin1)
+          .then((data) => {
+            if (activeCityIdRef.current === city.id && data) {
+              setAirQuality(data);
+            }
+            return data;
+          })
+          .catch(() => null);
+      });
+
+      // 3. Wikipedia Summary & Photo (~400ms or 0ms via bundle)
+      const wikiReq = bundleReq.then((bundle) => {
+        if (bundle?.summary) return bundle.summary;
+        return ApiService.getCitySummary(city.name, city.admin1, city.latitude, city.longitude)
+          .then((data) => {
+            if (activeCityIdRef.current === city.id && data) {
+              setCitySummary(data);
+            }
+            return data;
+          })
+          .catch(() => null);
+      });
 
       // 4. Wikidata POIs (1-3s, async progressive)
       const poisReq = ApiService.getNearbyPOIs(city.latitude, city.longitude, 12, city.name, city.admin1)

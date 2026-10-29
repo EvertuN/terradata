@@ -22,7 +22,71 @@ function timeoutSignal(ms: number = FETCH_TIMEOUT_MS): AbortSignal | undefined {
 
 let _citySearchPreload: Promise<void> | null = null;
 
+export interface CityBundle {
+  city: {
+    name: string;
+    admin1: string;
+    country: string;
+  };
+  weather: WeatherData | null;
+  airQuality: AirQualityData | null;
+  summary: CitySummary | null;
+  cachedAt?: string;
+}
+
 export const ApiService = {
+  /**
+   * Fetches the consolidated City bundle (Weather + Air Quality + Wikipedia Summary)
+   * from the Cloudflare Edge BFF in a single low-latency round-trip (15-30ms).
+   * Populates localized cache for Weather, Air Quality, and Summary automatically.
+   */
+  async getCityBundle(city: City): Promise<CityBundle | null> {
+    const coordsKey = normalizeCoords(city.latitude, city.longitude);
+    const cleanName = (city.name || '').trim().toLowerCase();
+    const cacheKey = `bundle_${coordsKey}_${cleanName}`;
+
+    return Cache.fetchWithCache(
+      cacheKey,
+      CACHE_TTL.WEATHER,
+      async () => {
+        try {
+          const params = new URLSearchParams({
+            lat: String(city.latitude),
+            lon: String(city.longitude),
+            name: city.name,
+            admin1: city.admin1 || '',
+            country: city.country || '',
+          });
+
+          const res = await fetch(`/api/city?${params.toString()}`, {
+            headers: { 'Accept': 'application/json' },
+            signal: timeoutSignal(4000),
+          });
+
+          if (!res.ok) return null;
+          const data = (await res.json()) as CityBundle;
+          if (data && (data.weather || data.summary)) {
+            // Pre-seed individual caches so concurrent / subsequent individual calls hit memory
+            if (data.weather) {
+              Cache.set(`weather_${coordsKey}`, data.weather, CACHE_TTL.WEATHER);
+            }
+            if (data.airQuality) {
+              Cache.set(`air_${coordsKey}`, data.airQuality, CACHE_TTL.AIR_QUALITY);
+            }
+            if (data.summary) {
+              Cache.set(`wiki_${cleanName}`, data.summary, CACHE_TTL.CITY_SUMMARY);
+            }
+            return data;
+          }
+          return null;
+        } catch {
+          // BFF endpoint unavailable (e.g. static dev server or network partition)
+          return null;
+        }
+      },
+      (res) => Boolean(res && (res.weather || res.summary))
+    );
+  },
   /**
    * Starts downloading + indexing the local city database before the first
    * keystroke (scheduled during browser idle time).
@@ -50,6 +114,24 @@ export const ApiService = {
       CACHE_TTL.CITY_SEARCH,
       async () => {
         const rawQuery = query.trim();
+
+        // 1. Try Cloudflare Edge BFF first (/api/search)
+        try {
+          const bffRes = await fetch(`/api/search?q=${encodeURIComponent(rawQuery)}`, {
+            headers: { 'Accept': 'application/json' },
+            signal: timeoutSignal(3000),
+          });
+          if (bffRes.ok) {
+            const bffData = (await bffRes.json()) as City[];
+            if (Array.isArray(bffData) && bffData.length > 0) {
+              return bffData;
+            }
+          }
+        } catch {
+          // BFF unavailable -> proceed to direct fallback
+        }
+
+        // 2. Direct fallback: Open-Meteo Geocoding + Local Fuzzy Search
         const encoded = encodeURIComponent(rawQuery);
         const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encoded}&count=10&language=pt&format=json`;
 
@@ -210,7 +292,7 @@ export const ApiService = {
   /**
    * Get Weather Forecast from Open-Meteo (APIS.md Line 2658)
    */
-  async getWeather(lat: number, lon: number): Promise<WeatherData | null> {
+  async getWeather(lat: number, lon: number, cityName = '', admin1 = ''): Promise<WeatherData | null> {
     const coordsKey = normalizeCoords(lat, lon);
     const cacheKey = `weather_${coordsKey}`;
 
@@ -218,6 +300,23 @@ export const ApiService = {
       cacheKey,
       CACHE_TTL.WEATHER,
       async () => {
+        // 1. If cityName is provided, try Cloudflare Edge BFF bundle first
+        if (cityName) {
+          try {
+            const bundle = await ApiService.getCityBundle({
+              latitude: lat,
+              longitude: lon,
+              name: cityName,
+              admin1,
+            } as City);
+            if (bundle?.weather) {
+              return bundle.weather;
+            }
+          } catch {
+            // fallback to direct Open-Meteo
+          }
+        }
+
         const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m,surface_pressure&hourly=temperature_2m,precipitation_probability,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max&forecast_hours=24&timezone=auto`;
     try {
       const res = await fetch(url, { signal: timeoutSignal() });
@@ -270,7 +369,7 @@ export const ApiService = {
   /**
    * Get Air Quality from Open-Meteo Air Quality API
    */
-  async getAirQuality(lat: number, lon: number): Promise<AirQualityData | null> {
+  async getAirQuality(lat: number, lon: number, cityName = '', admin1 = ''): Promise<AirQualityData | null> {
     const coordsKey = normalizeCoords(lat, lon);
     const cacheKey = `air_${coordsKey}`;
 
@@ -278,6 +377,23 @@ export const ApiService = {
       cacheKey,
       CACHE_TTL.AIR_QUALITY,
       async () => {
+        // 1. If cityName is provided, try Cloudflare Edge BFF bundle first
+        if (cityName) {
+          try {
+            const bundle = await ApiService.getCityBundle({
+              latitude: lat,
+              longitude: lon,
+              name: cityName,
+              admin1,
+            } as City);
+            if (bundle?.airQuality) {
+              return bundle.airQuality;
+            }
+          } catch {
+            // fallback to direct Open-Meteo Air Quality
+          }
+        }
+
         const url = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=european_aqi,us_aqi,pm10,pm2_5,nitrogen_dioxide,ozone`;
     try {
       const res = await fetch(url, { signal: timeoutSignal() });
@@ -333,7 +449,7 @@ export const ApiService = {
    * Get City Summary & High-Resolution Image (APIS.md Line 1877)
    * Resolves actual city photography, avoiding flags, coat of arms or maps
    */
-  async getCitySummary(cityName: string, fallbackName = ''): Promise<CitySummary> {
+  async getCitySummary(cityName: string, fallbackName = '', lat?: number, lon?: number): Promise<CitySummary> {
     const clean = (cityName || '').trim().toLowerCase();
     const cacheKey = `wiki_${clean}`;
 
@@ -341,7 +457,24 @@ export const ApiService = {
       cacheKey,
       CACHE_TTL.CITY_SUMMARY,
       async () => {
-    const isBadImage = (url: string | null) => {
+        // 1. If coordinates are available, try Cloudflare Edge BFF bundle first
+        if (lat !== undefined && lon !== undefined) {
+          try {
+            const bundle = await ApiService.getCityBundle({
+              latitude: lat,
+              longitude: lon,
+              name: cityName,
+              admin1: fallbackName,
+            } as City);
+            if (bundle?.summary) {
+              return bundle.summary;
+            }
+          } catch {
+            // fallback to direct Wikipedia
+          }
+        }
+
+        const isBadImage = (url: string | null) => {
       if (!url) return true;
       const lower = url.toLowerCase();
       return (
@@ -501,6 +634,29 @@ export const ApiService = {
       cacheKey,
       CACHE_TTL.POIS,
       async () => {
+        // 1. Try Cloudflare Edge BFF first (/api/pois)
+        try {
+          const params = new URLSearchParams({
+            lat: String(lat),
+            lon: String(lon),
+            limit: String(limit),
+            name: cityName,
+            admin1: admin1,
+          });
+          const bffRes = await fetch(`/api/pois?${params.toString()}`, {
+            headers: { 'Accept': 'application/json' },
+            signal: timeoutSignal(3500),
+          });
+          if (bffRes.ok) {
+            const bffData = (await bffRes.json()) as PointOfInterest[];
+            if (Array.isArray(bffData) && bffData.length > 0) {
+              return bffData;
+            }
+          }
+        } catch {
+          // BFF unavailable -> proceed to direct Wikidata SPARQL fallback
+        }
+
         const pois: PointOfInterest[] = [];
     const seen = new Set<string>();
     const curLower = (cityName || '').toLowerCase();

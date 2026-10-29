@@ -1,5 +1,8 @@
 name = "terradata"
 compatibility_date = "2026-10-21"
+compatibility_flags = ["nodejs_compat"]
+
+main = "worker/index.ts"
 
 [build]
 command = "npm run build"
