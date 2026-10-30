@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+﻿import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -35,6 +35,7 @@ import { NearbyCitiesSection } from '../components/NearbyCitiesSection';
 import { InteractiveMap } from '../components/InteractiveMap';
 import { SmartDayInsights } from '../components/SmartDayInsights';
 import { OneDayItinerary } from '../components/OneDayItinerary';
+import { AIItinerarySection } from '../components/AIItinerarySection';
 import { SnapshotModal } from '../components/SnapshotModal';
 import { DashboardSkeleton } from '../components/DashboardSkeleton';
 import { Toast, ToastProps } from '../components/Toast';
@@ -555,7 +556,8 @@ export default function HomePage() {
             {(activeTab === 'all' || activeTab === 'pois') && (
               <View style={styles.sectionWrap}>
                 <POIsSection pois={pois} theme={theme} />
-                <OneDayItinerary city={currentCity} pois={pois} theme={theme} />
+                <OneDayItinerary city={currentCity} weather={weather} theme={theme} />
+                <AIItinerarySection city={currentCity} weather={weather} theme={theme} />
               </View>
             )}
 

@@ -4,14 +4,27 @@ import { WorkerEnv, CityBundleResponse } from './types';
 import {
   EDGE_CACHE_CONTROL,
   buildCanonicalCacheRequest,
+  buildCanonicalQuickItineraryRequest,
   matchEdgeCache,
   putEdgeCache,
 } from './utils/cache';
+import {
+  checkRateLimit,
+  validateBotHeaders,
+  validateItineraryPayload,
+  getTemperatureBand,
+  getQuickItineraryCacheKey,
+  getQuickItineraryFromMemory,
+  setQuickItineraryToMemory,
+  sanitizeErrorMessage,
+} from './utils/security';
 import { fetchWeather } from './services/weather';
 import { fetchAirQuality } from './services/airQuality';
 import { fetchCitySummary } from './services/wiki';
 import { fetchPois } from './services/pois';
 import { searchCitiesBff } from './services/citySearch';
+import { generateItinerary } from './services/itinerary';
+import { AIItinerary } from '../types';
 
 const app = new Hono<{ Bindings: WorkerEnv }>();
 
@@ -20,7 +33,7 @@ app.use(
   '*',
   cors({
     origin: '*',
-    allowMethods: ['GET', 'OPTIONS'],
+    allowMethods: ['GET', 'POST', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Accept', 'Authorization'],
     maxAge: 86400,
   })
@@ -224,6 +237,148 @@ app.get('/api/search', async (c) => {
   putEdgeCache(cacheReq, response, c.executionCtx);
 
   return response;
+});
+
+/**
+ * POST /api/itinerary
+ * Generates an intelligent tourist itinerary using OpenRouter AI.
+ * Incorporates real-time weather and time context.
+ * 
+ * Hardened with:
+ * - Bot & automated scraper defenses (header inspection & tool rejection)
+ * - Rate limiting (max 5 req/min per IP, HTTP 429)
+ * - Honeypot traps & strict payload validation
+ * - 2-tier caching for Quick itineraries (Cloudflare Edge Cache + in-memory cooldowns)
+ * - Strict API key leakage prevention
+ */
+app.post('/api/itinerary', async (c) => {
+  // 1. Bot & Scraper Protection: Validate User-Agent and Content-Type
+  const botValidation = validateBotHeaders({
+    userAgent: c.req.header('user-agent'),
+    contentType: c.req.header('content-type'),
+  });
+
+  if (!botValidation.allowed) {
+    return c.json(
+      { error: botValidation.error || 'Acesso negado.' },
+      (botValidation.status || 403) as any
+    );
+  }
+
+  // 2. Token Exhaustion & Wallet DoS Protection: Rate limiting (5 req / min per IP)
+  const clientIp =
+    c.req.header('cf-connecting-ip') ||
+    c.req.header('x-real-ip') ||
+    c.req.header('x-forwarded-for')?.split(',')[0].trim() ||
+    'anonymous_ip';
+
+  const rateLimit = checkRateLimit(clientIp);
+  c.header('RateLimit-Limit', '5');
+  c.header('RateLimit-Remaining', String(rateLimit.remaining));
+  c.header('RateLimit-Reset', String(Math.ceil(rateLimit.resetAt / 1000)));
+
+  if (!rateLimit.allowed) {
+    c.header('Retry-After', String(rateLimit.retryAfterSeconds));
+    return c.json(
+      { error: 'Muitas requisições. Aguarde um instante antes de gerar outro roteiro.' },
+      429
+    );
+  }
+
+  // 3. API Key Verification (Guaranteed never to leak to client in responses)
+  const apiKey = c.env?.OPENROUTER_API_KEY;
+  if (!apiKey) {
+    console.error('[BFF /api/itinerary] OPENROUTER_API_KEY not configured.');
+    return c.json({ error: 'Serviço de roteiros indisponível no momento.' }, 503);
+  }
+
+  // 4. Honeypot & Payload Schema Verification
+  let rawBody: unknown;
+  try {
+    rawBody = await c.req.json();
+  } catch {
+    return c.json({ error: 'Requisição inválida.' }, 400);
+  }
+
+  const payloadValidation = validateItineraryPayload(rawBody);
+  if (!payloadValidation.valid || !payloadValidation.options) {
+    return c.json(
+      { error: payloadValidation.error || 'Requisição inválida.' },
+      (payloadValidation.status || 400) as any
+    );
+  }
+
+  const options = payloadValidation.options;
+
+  // 5. Fast Quick-Itinerary Cache (2 Hours TTL): avoid hitting OpenRouter if recently generated
+  if (options.mode === 'quick') {
+    // 5a. Check In-Memory Cache first (0ms lookup)
+    const memKey = getQuickItineraryCacheKey(options.cityName, options.weather?.temperature);
+    const memCached = getQuickItineraryFromMemory(memKey);
+    if (memCached) {
+      return c.json(memCached, 200, {
+        'Cache-Control': EDGE_CACHE_CONTROL.ITINERARY_QUICK,
+        'X-TerraData-Cache': 'HIT-MEMORY',
+      });
+    }
+
+    // 5b. Check Cloudflare Edge Cache (caches.default across global Edge PoPs)
+    const tempBand = getTemperatureBand(options.weather?.temperature);
+    const cacheReq = buildCanonicalQuickItineraryRequest(c.req.url, options.cityName, tempBand);
+    const edgeCached = await matchEdgeCache(cacheReq);
+    if (edgeCached) {
+      try {
+        const cachedJson = (await edgeCached.json()) as AIItinerary;
+        setQuickItineraryToMemory(memKey, cachedJson);
+        return c.json(cachedJson, 200, {
+          'Cache-Control': EDGE_CACHE_CONTROL.ITINERARY_QUICK,
+          'X-TerraData-Cache': 'HIT-EDGE',
+        });
+      } catch {
+        // Fallback to generation if cache corrupted
+      }
+    }
+  }
+
+  // 6. Generate Itinerary via OpenRouter AI with sanitized preferences and prompt protection
+  try {
+    const itinerary = await generateItinerary(apiKey, {
+      ...options,
+      referer: c.env?.TERRADATA_LINK,
+    });
+
+    if (options.mode === 'quick') {
+      const memKey = getQuickItineraryCacheKey(options.cityName, options.weather?.temperature);
+      setQuickItineraryToMemory(memKey, itinerary);
+
+      const tempBand = getTemperatureBand(options.weather?.temperature);
+      const cacheReq = buildCanonicalQuickItineraryRequest(c.req.url, options.cityName, tempBand);
+      const edgeResponse = new Response(JSON.stringify(itinerary), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': EDGE_CACHE_CONTROL.ITINERARY_QUICK,
+          'X-TerraData-Cache': 'HIT-EDGE',
+        },
+      });
+      putEdgeCache(cacheReq, edgeResponse, c.executionCtx);
+
+      return c.json(itinerary, 200, {
+        'Cache-Control': EDGE_CACHE_CONTROL.ITINERARY_QUICK,
+        'X-TerraData-Cache': 'MISS',
+      });
+    }
+
+    return c.json(itinerary, 200, {
+      'Cache-Control': 'no-store',
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Erro ao gerar roteiro.';
+    // Security guarantee: Strip API key or authorization tokens from error response
+    const safeMessage = sanitizeErrorMessage(message, apiKey);
+    console.error('[BFF /api/itinerary] Error:', safeMessage);
+    return c.json({ error: safeMessage }, 500);
+  }
 });
 
 // 4. Fallback for Static Assets (Next.js export in ./out)

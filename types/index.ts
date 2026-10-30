@@ -100,3 +100,38 @@ export interface NearbyCity {
   distanceKm: number;
   direction: string;
 }
+
+// AI Itinerary types
+export type ItineraryDuration = 'Meio dia' | '1 dia' | '2 dias' | '3 dias';
+export type ItineraryTransport = 'Carro' | 'Moto' | 'A pé' | 'Bicicleta' | 'Transporte público';
+
+export interface AIItineraryStop {
+  shift?: string;
+  time: string;
+  title: string;
+  description: string;
+  category: string;
+  tip?: string;
+  themeColor?: string;
+  pageId?: string | number;
+  lat?: number;
+  lon?: number;
+  wikiUrl?: string;
+  mapsUrl?: string;
+  thumbnail?: string | null;
+  distFormatted?: string;
+}
+
+export interface AIItineraryDay {
+  day: number;
+  stops: AIItineraryStop[];
+}
+
+export interface AIItinerary {
+  title: string;
+  city: string;
+  duration: ItineraryDuration | 'Roteiro Rápido';
+  transport?: ItineraryTransport | 'Geral';
+  weatherContext?: string;
+  days: AIItineraryDay[];
+}

@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
+const isProd = process.env.NODE_ENV === 'production';
+
 const nextConfig = {
-  output: 'export',
+  ...(isProd ? { output: 'export' } : {}),
   images: {
     unoptimized: true,
   },
@@ -13,7 +15,7 @@ const nextConfig = {
   compiler: {
     // Strip debug logs from production bundles (keep warnings/errors).
     removeConsole:
-      process.env.NODE_ENV === 'production' ? { exclude: ['error', 'warn'] } : false,
+      isProd ? { exclude: ['error', 'warn'] } : false,
   },
   webpack: (config) => {
     config.resolve.alias = {

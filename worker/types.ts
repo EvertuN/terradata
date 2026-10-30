@@ -11,6 +11,8 @@ export interface WorkerEnv {
   ASSETS?: {
     fetch: (request: Request | string) => Promise<Response>;
   };
+  OPENROUTER_API_KEY?: string;
+  TERRADATA_LINK?: string;
 }
 
 export interface CityBundleResponse {

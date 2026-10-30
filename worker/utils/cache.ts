@@ -10,6 +10,7 @@ export const EDGE_CACHE_CONTROL = {
   CITY: 'public, max-age=900, s-maxage=900, stale-while-revalidate=86400',
   POIS: 'public, max-age=604800, s-maxage=604800, stale-while-revalidate=86400',
   SEARCH: 'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800',
+  ITINERARY_QUICK: 'public, max-age=7200, s-maxage=7200, stale-while-revalidate=86400',
 };
 
 /**
@@ -43,6 +44,25 @@ export function buildCanonicalCacheRequest(rawUrl: string, endpoint: 'city' | 'p
   }
 
   cleanParams.sort();
+  parsed.search = cleanParams.toString();
+
+  return new Request(parsed.toString(), {
+    method: 'GET',
+    headers: { 'Accept': 'application/json' },
+  });
+}
+
+/**
+ * Creates a canonical Request object for caching quick itineraries at Cloudflare Edge (caches.default).
+ */
+export function buildCanonicalQuickItineraryRequest(rawUrl: string, cityName: string, tempBand: string): Request {
+  const parsed = new URL(rawUrl);
+  const cleanParams = new URLSearchParams();
+  cleanParams.set('endpoint', 'itinerary_quick');
+  cleanParams.set('city', cityName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim());
+  cleanParams.set('temp', tempBand);
+  cleanParams.sort();
+  parsed.pathname = '/api/itinerary/cache_quick';
   parsed.search = cleanParams.toString();
 
   return new Request(parsed.toString(), {
