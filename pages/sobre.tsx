@@ -133,7 +133,7 @@ export default function SobrePage() {
               Desenvolvimento & Autoria
             </Text>
             <Text style={[styles.cardBody, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
-              O projeto foi idealizado e desenvolvido de forma independente por <Text style={styles.boldText}>Everton Almeida</Text>, em Rondônia, Brasil. Construído com tecnologias modernas da web — incluindo Next.js, React Native Web e TypeScript — o TerraData reflete uma visão prática de que ferramentas digitais podem ser poderosas, funcionais e esteticamente agradáveis.
+              O projeto foi idealizado e desenvolvido de forma independente por <Text style={styles.boldText}>Everton Almeida</Text>, em Rondônia, Brasil. Construído com tecnologias modernas da web - incluindo Next.js, React Native Web e TypeScript - o TerraData reflete uma visão prática de que ferramentas digitais podem ser poderosas, funcionais e esteticamente agradáveis.
             </Text>
             <View style={styles.authorLinksRow}>
               <TouchableOpacity

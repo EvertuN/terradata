@@ -71,10 +71,10 @@ export const AIItinerarySection: React.FC<AIItinerarySectionProps> = ({
           country: city.country,
           weather: weather?.current
             ? {
-                temperature: Math.round(weather.current.temperature),
-                apparentTemperature: Math.round(weather.current.apparentTemperature),
-                condition: conditionLabel,
-              }
+              temperature: Math.round(weather.current.temperature),
+              apparentTemperature: Math.round(weather.current.apparentTemperature),
+              condition: conditionLabel,
+            }
             : null,
           preferences: preferences.slice(0, 100),
           duration,
@@ -128,7 +128,7 @@ export const AIItinerarySection: React.FC<AIItinerarySectionProps> = ({
           A IA monta um roteiro personalizado para {city.name} adaptado ao clima, meio de transporte e suas preferências.
         </Text>
 
-        {/* Campo 1 — Preferências */}
+        {/* Campo 1 - Preferências */}
         <View style={styles.fieldGroup}>
           <Text style={[styles.fieldLabel, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
             Preferências
@@ -151,7 +151,7 @@ export const AIItinerarySection: React.FC<AIItinerarySectionProps> = ({
           </View>
         </View>
 
-        {/* Campo 2 — Duração */}
+        {/* Campo 2 - Duração */}
         <View style={styles.fieldGroup}>
           <Text style={[styles.fieldLabel, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
             Duração
@@ -177,8 +177,8 @@ export const AIItinerarySection: React.FC<AIItinerarySectionProps> = ({
                       active
                         ? styles.pillTextActive
                         : isDark
-                        ? styles.textSecondaryDark
-                        : styles.textSecondaryLight,
+                          ? styles.textSecondaryDark
+                          : styles.textSecondaryLight,
                     ]}
                   >
                     {d}
@@ -189,7 +189,7 @@ export const AIItinerarySection: React.FC<AIItinerarySectionProps> = ({
           </View>
         </View>
 
-        {/* Campo 3 — Transporte */}
+        {/* Campo 3 - Transporte */}
         <View style={styles.fieldGroup}>
           <Text style={[styles.fieldLabel, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
             Transporte <Text style={styles.required}>*</Text>
@@ -215,8 +215,8 @@ export const AIItinerarySection: React.FC<AIItinerarySectionProps> = ({
                       active
                         ? styles.pillTextActive
                         : isDark
-                        ? styles.textSecondaryDark
-                        : styles.textSecondaryLight,
+                          ? styles.textSecondaryDark
+                          : styles.textSecondaryLight,
                     ]}
                   >
                     {t}
@@ -345,7 +345,7 @@ export const AIItinerarySection: React.FC<AIItinerarySectionProps> = ({
               </View>
             ))}
 
-            {/* Ação — Refazer */}
+            {/* Ação - Refazer */}
             <TouchableOpacity
               style={[styles.retryBtn, isDark ? styles.retryBtnDark : styles.retryBtnLight]}
               onPress={() => {

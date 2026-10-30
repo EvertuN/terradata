@@ -135,7 +135,7 @@ export default function ContatoPage() {
               Repositório & Código Aberto
             </Text>
             <Text style={[styles.cardBody, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
-              O TerraData é um projeto mantido com código aberto. Você pode inspecionar o código-fonte, reportar problemas (issues), sugerir melhorias ou enviar contribuições diretas via pull requests:
+              O TerraData é um projeto mantido com código aberto. Você pode inspecionar o código-fonte, reportar problemas, sugerir melhorias ou enviar contribuições diretas via pull requests:
             </Text>
             <View style={styles.actionRow}>
               <TouchableOpacity
