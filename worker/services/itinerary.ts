@@ -9,7 +9,7 @@ export { sanitizePreferences };
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MODEL = 'nvidia/nemotron-3.5-lightning:free';
-const TIMEOUT_MS = 28_000; // 28s — Cloudflare Worker hard limit is 30s
+const TIMEOUT_MS = 28_000; // 28s - Cloudflare Worker hard limit is 30s
 
 // Max stops per duration
 const MAX_STOPS: Record<ItineraryDuration, number> = {

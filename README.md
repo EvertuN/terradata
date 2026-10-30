@@ -102,18 +102,18 @@ Para eliminar a percepção de lentidão causada por consultas SPARQL profundas 
 ## 🛠 Stack Tecnológica
 
 ### Frontend
-- **React 18 & Next.js 14** — Renderização de componentes e exportação estática (`output: 'export'`).
-- **React Native for Web 0.19** — Arquitetura de componentes móvel/web unificada com layout Flexbox.
-- **TypeScript 5.6** — Tipagem estática rigorosa de ponta a ponta.
-- **Chart.js 4.4** — Gráficos meteorológicos com curvas Bézier calibradas e eixos sem ruído.
-- **Leaflet 1.9** — Cartografia interativa com renderização de tiles do CartoDB / OpenStreetMap.
-- **Lucide React** — Ícones vetoriais monocromáticos com espessuras de traço padronizadas.
+- **React 18 & Next.js 14** - Renderização de componentes e exportação estática (`output: 'export'`).
+- **React Native for Web 0.19** - Arquitetura de componentes móvel/web unificada com layout Flexbox.
+- **TypeScript 5.6** - Tipagem estática rigorosa de ponta a ponta.
+- **Chart.js 4.4** - Gráficos meteorológicos com curvas Bézier calibradas e eixos sem ruído.
+- **Leaflet 1.9** - Cartografia interativa com renderização de tiles do CartoDB / OpenStreetMap.
+- **Lucide React** - Ícones vetoriais monocromáticos com espessuras de traço padronizadas.
 
 ### Backend na Borda (Cloudflare Workers BFF)
-- **Cloudflare Workers** — Execução Serverless em V8 Isolates distribuídos globalmente.
-- **Hono 4.13** — Framework ultra-leve para roteamento HTTP com suporte nativo a Web Standards.
-- **Cloudflare Cache API** — Armazenamento de respostas de borda com cabeçalhos `Cache-Control` calibrados e expiração dinâmica.
-- **Wrangler 4.156** — Toolchain oficial para build, emulação local e deploy na Cloudflare.
+- **Cloudflare Workers** - Execução Serverless em V8 Isolates distribuídos globalmente.
+- **Hono 4.13** - Framework ultra-leve para roteamento HTTP com suporte nativo a Web Standards.
+- **Cloudflare Cache API** - Armazenamento de respostas de borda com cabeçalhos `Cache-Control` calibrados e expiração dinâmica.
+- **Wrangler 4.156** - Toolchain oficial para build, emulação local e deploy na Cloudflare.
 
 ### Design System & Estilo
 - **Apple Human Interface Guidelines (HIG)**
@@ -246,7 +246,7 @@ A camada de borda do Cloudflare Workers expõe endpoints consolidados com tempos
 | `GET` | `/api/city` | `lat`, `lon`, `name` | Pacote unificado com Clima, Qualidade do Ar e Resumo da Wikipédia | **30 min** (`s-maxage=1800`) |
 | `GET` | `/api/pois` | `lat`, `lon` | Pontos turísticos e atrações culturais via Wikidata SPARQL | **7 dias** (`s-maxage=604800`) |
 | `GET` | `/api/search` | `q` | Busca e geocodificação global de cidades | **24 horas** (`s-maxage=86400`) |
-| `GET` | `/api/health` | — | Verificação de disponibilidade e versão do Edge BFF | `no-cache` |
+| `GET` | `/api/health` | - | Verificação de disponibilidade e versão do Edge BFF | `no-cache` |
 
 ### Exemplo de Resposta Unificada (`GET /api/city?lat=-9.9057&lon=-63.0325&name=Ariquemes`)
 
@@ -296,7 +296,7 @@ A camada de borda do Cloudflare Workers expõe endpoints consolidados com tempos
 
 Abaixo estão capturas reais da aplicação em execução, utilizando os dados em tempo real do município de **Ariquemes, Rondônia (Brasil)**.
 
-### 1. Tela Inicial — Busca Minimalista (Apple Spotlight)
+### 1. Tela Inicial - Busca Minimalista (Apple Spotlight)
 <p align="center">
   <img src="docs/assets/screenshot-landing.png" alt="Tela de Busca Centralizada" width="850">
 </p>
