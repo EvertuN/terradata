@@ -92,7 +92,10 @@ export const WeatherSection: React.FC<WeatherSectionProps> = ({
   const allMaxs = (weather.daily || []).map(d => d.tempMax);
   const weekMin = allMins.length > 0 ? Math.min(...allMins) : 0;
   const weekMax = allMaxs.length > 0 ? Math.max(...allMaxs) : 30;
-  const weekRange = Math.max(1, weekMax - weekMin);
+  // Add padding of 2°C around the weekly range so bars never touch the edges
+  const paddedMin = weekMin - 2;
+  const paddedMax = weekMax + 2;
+  const weekRange = Math.max(1, paddedMax - paddedMin);
 
   return (
     <View style={styles.container}>
@@ -244,14 +247,14 @@ export const WeatherSection: React.FC<WeatherSectionProps> = ({
           {weather.daily.map((day, idx) => {
             const meta = ApiService.getWeatherMeta(day.weatherCode);
 
-            // Proportional calculations relative to week's absolute minimum and maximum
-            const leftPct = Math.max(0, Math.min(88, ((day.tempMin - weekMin) / weekRange) * 100));
-            const widthPct = Math.max(10, Math.min(100 - leftPct, ((day.tempMax - day.tempMin) / weekRange) * 100));
+            // Proportional calculations relative to padded week range
+            const leftPct = Math.max(0, Math.min(95, ((day.tempMin - paddedMin) / weekRange) * 100));
+            const widthPct = Math.max(8, Math.min(100 - leftPct, ((day.tempMax - day.tempMin) / weekRange) * 100));
 
             // Current live temperature indicator dot for "Hoje"
             const isToday = idx === 0;
             const currentTemp = weather.current.temperature;
-            const currentDotPct = Math.max(0, Math.min(100, ((currentTemp - weekMin) / weekRange) * 100));
+            const currentDotPct = Math.max(0, Math.min(100, ((currentTemp - paddedMin) / weekRange) * 100));
 
             // Dynamic color tint based on temperature
             let barColor = '#38bdf8'; // cool
@@ -267,14 +270,23 @@ export const WeatherSection: React.FC<WeatherSectionProps> = ({
                 style={[
                   styles.dailyRow,
                   idx !== weather.daily.length - 1 && (isDark ? styles.rowBorderDark : styles.rowBorderLight),
+                  isToday && (isDark ? styles.todayRowDark : styles.todayRowLight),
                 ]}
               >
                 {/* Day Name */}
-                <Text style={[styles.dayName, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
-                  {formatDayName(day.date, idx)}
-                </Text>
+                <View style={styles.dayNameCol}>
+                  <Text
+                    style={[
+                      styles.dayName,
+                      isDark ? styles.textPrimaryDark : styles.textPrimaryLight,
+                      isToday && styles.todayDayName,
+                    ]}
+                  >
+                    {formatDayName(day.date, idx)}
+                  </Text>
+                </View>
 
-                {/* Weather Icon */}
+                {/* Weather Icon + condition label */}
                 <View style={styles.dayIconCol}>
                   {getWeatherIcon(meta.icon, 18, isDark ? '#ffb74d' : '#f59e0b')}
                 </View>
@@ -284,7 +296,7 @@ export const WeatherSection: React.FC<WeatherSectionProps> = ({
                   {formatTemp(day.tempMin, temperatureUnit)}
                 </Text>
 
-                {/* Authentic Apple Weather Dynamic Proportional Range Track */}
+                {/* Dynamic Proportional Range Track */}
                 <View style={[styles.tempBarTrack, isDark ? styles.tempBarTrackDark : styles.tempBarTrackLight]}>
                   <View
                     style={[
@@ -481,7 +493,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 12,
     gap: 12,
+  },
+  todayRowLight: {
+    backgroundColor: 'rgba(0, 113, 227, 0.05)',
+  },
+  todayRowDark: {
+    backgroundColor: 'rgba(100, 181, 246, 0.08)',
+  },
+  dayNameCol: {
+    width: 60,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   rowBorderLight: {
     borderBottomWidth: 1,
@@ -492,9 +518,12 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255, 255, 255, 0.05)',
   },
   dayName: {
-    width: 60,
     fontSize: 13,
     fontWeight: '600',
+  },
+  todayDayName: {
+    color: '#0071e3',
+    fontWeight: '700',
   },
   dayIconCol: {
     width: 28,
@@ -519,8 +548,8 @@ const styles = StyleSheet.create({
   },
   tempBarTrack: {
     flex: 1,
-    height: 5,
-    borderRadius: 3,
+    height: 8,
+    borderRadius: 4,
     position: 'relative',
   },
   tempBarTrackLight: {
@@ -533,18 +562,18 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     bottom: 0,
-    borderRadius: 3,
+    borderRadius: 4,
   },
   liveTempDot: {
     position: 'absolute',
-    top: -2.5,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    top: -3,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     backgroundColor: '#ffffff',
-    borderWidth: 2,
+    borderWidth: 2.5,
     zIndex: 2,
-    marginLeft: -5,
+    marginLeft: -7,
   },
   tempMaxText: {
     width: 36,
