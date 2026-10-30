@@ -7,8 +7,19 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
+  Linking,
 } from 'react-native';
-import { ChevronLeft, Sun, Moon } from 'lucide-react';
+import {
+  ChevronLeft,
+  Sun,
+  Moon,
+  Mail,
+  Github,
+  Globe,
+  Linkedin,
+  MapPin,
+  ExternalLink,
+} from 'lucide-react';
 
 export default function ContatoPage() {
   const router = useRouter();
@@ -45,7 +56,10 @@ export default function ContatoPage() {
     <View style={[styles.root, isDark ? styles.rootDark : styles.rootLight]}>
       <Head>
         <title>Contato | TerraData</title>
-        <meta name="description" content="Entre em contato com o TerraData." />
+        <meta
+          name="description"
+          content="Entre em contato com o autor e equipe do TerraData. Canais de suporte, feedback, parcerias e repositório oficial."
+        />
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
       </Head>
 
@@ -87,46 +101,117 @@ export default function ContatoPage() {
             Contato
           </Text>
           <Text style={[styles.heroSubtitle, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
-            Canais de contato, dúvidas, sugestões e colaboração.
+            Canais diretos para dúvidas, sugestões, colaboração técnica e suporte.
           </Text>
         </View>
 
         {/* Apple Cards Stack */}
         <View style={styles.cardsStack}>
+          {/* E-mail de Contato */}
           <View style={[styles.card, isDark ? styles.cardDark : styles.cardLight]}>
             <Text style={[styles.cardTitle, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
-              E-mail Principal
+              E-mail de Contato
             </Text>
             <Text style={[styles.cardBody, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
-              {'{INFO AQUI}'}
+              Para mensagens gerais, parcerias, sugestões de novos recursos ou suporte técnico direto, envie um e-mail para:
             </Text>
+            <View style={styles.actionRow}>
+              <TouchableOpacity
+                style={[styles.actionChip, isDark ? styles.chipDark : styles.chipLight]}
+                onPress={() => Linking.openURL('mailto:contato@everton.net.br')}
+                activeOpacity={0.7}
+              >
+                <Mail size={14} color={isDark ? '#64b5f6' : '#0071e3'} />
+                <Text style={[styles.actionChipText, isDark ? styles.linkActiveDark : styles.linkActiveLight]}>
+                  contato@everton.net.br
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
+          {/* Repositório & Código Aberto */}
           <View style={[styles.card, isDark ? styles.cardDark : styles.cardLight]}>
             <Text style={[styles.cardTitle, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
               Repositório & Código Aberto
             </Text>
             <Text style={[styles.cardBody, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
-              {'{INFO AQUI}'}
+              O TerraData é um projeto mantido com código aberto. Você pode inspecionar o código-fonte, reportar problemas (issues), sugerir melhorias ou enviar contribuições diretas via pull requests:
             </Text>
+            <View style={styles.actionRow}>
+              <TouchableOpacity
+                style={[styles.actionChip, isDark ? styles.chipDark : styles.chipLight]}
+                onPress={() => Linking.openURL('https://github.com/EvertuN/terradata')}
+                activeOpacity={0.7}
+              >
+                <Github size={14} color={isDark ? '#64b5f6' : '#0071e3'} />
+                <Text style={[styles.actionChipText, isDark ? styles.linkActiveDark : styles.linkActiveLight]}>
+                  github.com/EvertuN/terradata
+                </Text>
+                <ExternalLink size={12} color={isDark ? '#9eabbd' : '#86868b'} style={{ marginLeft: 2 }} />
+              </TouchableOpacity>
+            </View>
           </View>
 
+          {/* Desenvolvedor & Redes */}
           <View style={[styles.card, isDark ? styles.cardDark : styles.cardLight]}>
             <Text style={[styles.cardTitle, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
-              Redes Sociais & Canais
+              Desenvolvedor & Conexões
             </Text>
             <Text style={[styles.cardBody, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
-              {'{INFO AQUI}'}
+              Idealizado e desenvolvido de forma independente por <Text style={styles.boldText}>Everton Almeida</Text>. Conecte-se e acompanhe outros projetos e publicações:
             </Text>
+            <View style={styles.actionRow}>
+              <TouchableOpacity
+                style={[styles.actionChip, isDark ? styles.chipDark : styles.chipLight]}
+                onPress={() => Linking.openURL('https://everton.net.br')}
+                activeOpacity={0.7}
+              >
+                <Globe size={13} color={isDark ? '#64b5f6' : '#0071e3'} />
+                <Text style={[styles.actionChipText, isDark ? styles.linkActiveDark : styles.linkActiveLight]}>
+                  everton.net.br
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.actionChip, isDark ? styles.chipDark : styles.chipLight]}
+                onPress={() => Linking.openURL('https://linkedin.com/in/almeidaeverton')}
+                activeOpacity={0.7}
+              >
+                <Linkedin size={13} color={isDark ? '#64b5f6' : '#0071e3'} />
+                <Text style={[styles.actionChipText, isDark ? styles.linkActiveDark : styles.linkActiveLight]}>
+                  linkedin.com/in/almeidaeverton
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.actionChip, isDark ? styles.chipDark : styles.chipLight]}
+                onPress={() => Linking.openURL('https://github.com/evertun')}
+                activeOpacity={0.7}
+              >
+                <Github size={13} color={isDark ? '#64b5f6' : '#0071e3'} />
+                <Text style={[styles.actionChipText, isDark ? styles.linkActiveDark : styles.linkActiveLight]}>
+                  github.com/evertun
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
+          {/* Localização & Base */}
           <View style={[styles.card, isDark ? styles.cardDark : styles.cardLight]}>
             <Text style={[styles.cardTitle, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
               Localização & Base
             </Text>
             <Text style={[styles.cardBody, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
-              {'{INFO AQUI}'}
+              O projeto tem como base e centro de desenvolvimento a região amazônica brasileira:
             </Text>
+            <View style={styles.actionRow}>
+              <View style={[styles.locationBadge, isDark ? styles.locationBadgeDark : styles.locationBadgeLight]}>
+                <MapPin size={14} color={isDark ? '#64b5f6' : '#0071e3'} />
+                <Text style={[styles.locationBadgeText, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
+                  Rondônia, Brasil
+                </Text>
+              </View>
+            </View>
           </View>
         </View>
 
@@ -261,7 +346,7 @@ const styles = StyleSheet.create({
     padding: 24,
     borderWidth: 1,
     boxShadow: '0 4px 18px rgba(16, 24, 40, 0.04)',
-    gap: 10,
+    gap: 12,
   },
   cardLight: {
     backgroundColor: '#ffffff',
@@ -279,7 +364,52 @@ const styles = StyleSheet.create({
   },
   cardBody: {
     fontSize: 15,
-    lineHeight: 23,
+    lineHeight: 24,
+  },
+  boldText: {
+    fontWeight: '600',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 4,
+  },
+  actionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 13,
+    borderRadius: 8,
+  },
+  chipLight: {
+    backgroundColor: '#f0f4fa',
+  },
+  chipDark: {
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  actionChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  locationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+  },
+  locationBadgeLight: {
+    backgroundColor: '#eef3fc',
+  },
+  locationBadgeDark: {
+    backgroundColor: 'rgba(10, 132, 255, 0.12)',
+  },
+  locationBadgeText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   footer: {
     marginTop: 20,

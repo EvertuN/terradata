@@ -7,8 +7,9 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
+  Linking,
 } from 'react-native';
-import { ChevronLeft, Sun, Moon } from 'lucide-react';
+import { ChevronLeft, Sun, Moon, Globe, Github, Linkedin } from 'lucide-react';
 
 export default function SobrePage() {
   const router = useRouter();
@@ -45,7 +46,10 @@ export default function SobrePage() {
     <View style={[styles.root, isDark ? styles.rootDark : styles.rootLight]}>
       <Head>
         <title>Sobre | TerraData</title>
-        <meta name="description" content="Sobre a plataforma TerraData." />
+        <meta
+          name="description"
+          content="Conheça a proposta, missão e arquitetura do TerraData: agregador inteligente de clima, cultura e roteiros para todas as cidades."
+        />
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
       </Head>
 
@@ -93,48 +97,87 @@ export default function SobrePage() {
 
         {/* Apple Cards Stack */}
         <View style={styles.cardsStack}>
+          {/* O que é o TerraData */}
           <View style={[styles.card, isDark ? styles.cardDark : styles.cardLight]}>
             <Text style={[styles.cardTitle, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
               O que é o TerraData?
             </Text>
             <Text style={[styles.cardBody, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
-              {'{INFO AQUI}'}
+              O TerraData é uma plataforma aberta de inteligência territorial que unifica dados meteorológicos de alta precisão, patrimônio cultural e sugestões dinâmicas de roteiros turísticos. Desenvolvido para entregar uma experiência limpa e livre de anúncios, o projeto indexa mais de 5.570 municípios brasileiros e as principais capitais mundiais em uma interface inspirada na simplicidade e refinamento dos sistemas Apple.
             </Text>
           </View>
 
+          {/* Nossa Missão & Propósito */}
           <View style={[styles.card, isDark ? styles.cardDark : styles.cardLight]}>
             <Text style={[styles.cardTitle, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
               Nossa Missão & Propósito
             </Text>
             <Text style={[styles.cardBody, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
-              {'{INFO AQUI}'}
+              Democratizar o acesso a informações públicas de forma rápida, privada e sem sobrecarga cognitiva. Acreditamos que pesquisar as condições climáticas de hoje ou planejar a visita aos pontos históricos de uma cidade deve ser uma experiência instantânea, confiável e transparente, sem coleta invasiva de dados ou rastreadores ocultos.
             </Text>
           </View>
 
+          {/* Como Funciona a Plataforma */}
           <View style={[styles.card, isDark ? styles.cardDark : styles.cardLight]}>
             <Text style={[styles.cardTitle, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
               Como Funciona a Plataforma
             </Text>
             <Text style={[styles.cardBody, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
-              {'{INFO AQUI}'}
+              A arquitetura do TerraData opera em três eixos integrados: modelos numéricos abertos do Open-Meteo para aferição de temperaturas, vento, índice UV e qualidade do ar em tempo real; consultas semânticas geolocalizadas via Wikidata e Wikipédia para identificação de atrações históricas e fotos de domínio público; e inteligência artificial generativa com proteção de taxa para sintetizar roteiros diários adaptados ao clima e horário do local.
             </Text>
           </View>
 
+          {/* Desenvolvimento & Autoria */}
           <View style={[styles.card, isDark ? styles.cardDark : styles.cardLight]}>
             <Text style={[styles.cardTitle, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
               Desenvolvimento & Autoria
             </Text>
             <Text style={[styles.cardBody, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
-              {'{INFO AQUI}'}
+              O projeto foi idealizado e desenvolvido de forma independente por <Text style={styles.boldText}>Everton Almeida</Text>, em Rondônia, Brasil. Construído com tecnologias modernas da web — incluindo Next.js, React Native Web e TypeScript — o TerraData reflete uma visão prática de que ferramentas digitais podem ser poderosas, funcionais e esteticamente agradáveis.
             </Text>
+            <View style={styles.authorLinksRow}>
+              <TouchableOpacity
+                style={[styles.authorChip, isDark ? styles.chipDark : styles.chipLight]}
+                onPress={() => Linking.openURL('https://everton.net.br')}
+                activeOpacity={0.7}
+              >
+                <Globe size={13} color={isDark ? '#64b5f6' : '#0071e3'} />
+                <Text style={[styles.authorChipText, isDark ? styles.linkActiveDark : styles.linkActiveLight]}>
+                  everton.net.br
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.authorChip, isDark ? styles.chipDark : styles.chipLight]}
+                onPress={() => Linking.openURL('https://linkedin.com/in/almeidaeverton')}
+                activeOpacity={0.7}
+              >
+                <Linkedin size={13} color={isDark ? '#64b5f6' : '#0071e3'} />
+                <Text style={[styles.authorChipText, isDark ? styles.linkActiveDark : styles.linkActiveLight]}>
+                  linkedin.com/in/almeidaeverton
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.authorChip, isDark ? styles.chipDark : styles.chipLight]}
+                onPress={() => Linking.openURL('https://github.com/evertun')}
+                activeOpacity={0.7}
+              >
+                <Github size={13} color={isDark ? '#64b5f6' : '#0071e3'} />
+                <Text style={[styles.authorChipText, isDark ? styles.linkActiveDark : styles.linkActiveLight]}>
+                  github.com/evertun
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
+          {/* Aviso Legal & Termos */}
           <View style={[styles.card, isDark ? styles.cardDark : styles.cardLight]}>
             <Text style={[styles.cardTitle, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
               Aviso Legal & Termos
             </Text>
             <Text style={[styles.cardBody, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
-              {'{INFO AQUI}'}
+              As previsões meteorológicas e resumos culturais apresentados são provenientes de fontes públicas e dados abertos mantidos por instituições terceiras, destinando-se a fins de consulta, planejamento e utilidade pública. Para situações de alerta emergencial ou desastres naturais, recomendamos sempre acompanhar as orientações da Defesa Civil e dos centros meteorológicos oficiais do seu estado.
             </Text>
           </View>
         </View>
@@ -288,7 +331,34 @@ const styles = StyleSheet.create({
   },
   cardBody: {
     fontSize: 15,
-    lineHeight: 23,
+    lineHeight: 24,
+  },
+  boldText: {
+    fontWeight: '600',
+  },
+  authorLinksRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 4,
+  },
+  authorChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  chipLight: {
+    backgroundColor: '#f0f4fa',
+  },
+  chipDark: {
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  authorChipText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   footer: {
     marginTop: 20,
