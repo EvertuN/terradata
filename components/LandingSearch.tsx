@@ -8,48 +8,80 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
+import { useRouter } from 'next/router';
 import {
   Search,
   Navigation,
   Globe2,
   MapPin,
   X,
-  ArrowRight,
   Sun,
   Moon,
-  Trash2,
   Sparkles,
+  CloudSun,
+  Cloud,
+  CloudFog,
+  CloudDrizzle,
+  CloudRain,
+  Snowflake,
+  CloudLightning,
+  Thermometer,
 } from 'lucide-react';
 import { City } from '../types';
 import { ApiService } from '../services/api';
-
 
 interface LandingSearchProps {
   onSelectCity: (city: City) => void;
   onCurrentLocation: () => void;
   isLoadingLocation: boolean;
-  cachedCity: City | null;
-  onClearCache: () => void;
+  recentCities?: City[];
+  onRemoveRecentCity?: (city: City) => void;
+  onClearRecentCities?: () => void;
+  cachedCity?: City | null;
+  onClearCache?: () => void;
   theme: 'dark' | 'light';
   onToggleTheme: () => void;
+}
+
+interface RecentWeatherInfo {
+  temperature: number;
+  weatherCode: number;
+  conditionLabel: string;
+  icon: string;
+  color: string;
 }
 
 export const LandingSearch: React.FC<LandingSearchProps> = ({
   onSelectCity,
   onCurrentLocation,
   isLoadingLocation,
+  recentCities = [],
+  onRemoveRecentCity,
+  onClearRecentCities,
   cachedCity,
   onClearCache,
   theme,
   onToggleTheme,
 }) => {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState<City[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
+  const [weatherMap, setWeatherMap] = useState<Record<string, RecentWeatherInfo>>({});
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  const isDark = theme === 'dark';
+
+  // Normalize recent cities list, falling back to cachedCity if recentCities is empty
+  const activeRecentCities: City[] = React.useMemo(() => {
+    if (recentCities && recentCities.length > 0) return recentCities;
+    if (cachedCity) return [cachedCity];
+    return [];
+  }, [recentCities, cachedCity]);
+
+  // Autocomplete search
   useEffect(() => {
     let isCurrent = true;
 
@@ -77,7 +109,7 @@ export const LandingSearch: React.FC<LandingSearchProps> = ({
       } finally {
         if (isCurrent) setIsSearching(false);
       }
-    }, 280);
+    }, 250);
 
     return () => {
       isCurrent = false;
@@ -85,17 +117,49 @@ export const LandingSearch: React.FC<LandingSearchProps> = ({
     };
   }, [searchQuery]);
 
-  // Warm the lazy city-database chunk during idle time so the first search is
-  // instant, without competing with the initial render or fonts.
+  // Warm up city database during idle time
   useEffect(() => {
     const w = window as any;
     if (typeof w.requestIdleCallback === 'function') {
       const id = w.requestIdleCallback(() => ApiService.preloadCitySearch(), { timeout: 3000 });
       return () => w.cancelIdleCallback?.(id);
     }
-    const id = setTimeout(() => ApiService.preloadCitySearch(), 1500);
+    const id = setTimeout(() => ApiService.preloadCitySearch(), 1200);
     return () => clearTimeout(id);
   }, []);
+
+  // Fetch real-time weather for recent cities in background (NO EMOJIS, clean Lucide icons)
+  useEffect(() => {
+    let isCancelled = false;
+    if (activeRecentCities.length === 0) return;
+
+    activeRecentCities.forEach(async (c) => {
+      const key = `${c.name}_${c.latitude.toFixed(2)}_${c.longitude.toFixed(2)}`;
+      if (weatherMap[key]) return;
+
+      try {
+        const w = await ApiService.getWeather(c.latitude, c.longitude, c.name, c.admin1);
+        if (isCancelled || !w?.current) return;
+        const meta = ApiService.getWeatherMeta(w.current.weatherCode);
+        setWeatherMap((prev) => ({
+          ...prev,
+          [key]: {
+            temperature: Math.round(w.current.temperature),
+            weatherCode: w.current.weatherCode,
+            conditionLabel: meta.label,
+            icon: meta.icon,
+            color: meta.color,
+          },
+        }));
+      } catch {
+        // Ignore weather fetch errors for recent cities
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeRecentCities]);
 
   const handleSelectSuggestion = (city: City) => {
     setSearchQuery('');
@@ -104,7 +168,60 @@ export const LandingSearch: React.FC<LandingSearchProps> = ({
     onSelectCity(city);
   };
 
-  const isDark = theme === 'dark';
+  const handleManualSearch = async () => {
+    const term = searchQuery.trim();
+    if (!term) return;
+
+    if (suggestions.length > 0) {
+      handleSelectSuggestion(suggestions[0]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const results = await ApiService.searchCities(term);
+      if (results && results.length > 0) {
+        handleSelectSuggestion(results[0]);
+      } else {
+        setShowDropdown(true);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Render weather icon (NO EMOJIS - pure Lucide vectors with accurate theme colors)
+  const renderWeatherIcon = (info?: RecentWeatherInfo) => {
+    const iconColor = info?.color || (isDark ? '#64b5f6' : '#0071e3');
+    const size = 18;
+
+    if (!info) {
+      return <Thermometer size={size} color={iconColor} />;
+    }
+
+    switch (info.icon) {
+      case 'Sun':
+        return <Sun size={size} color={iconColor} />;
+      case 'CloudSun':
+        return <CloudSun size={size} color={iconColor} />;
+      case 'Cloud':
+        return <Cloud size={size} color={iconColor} />;
+      case 'CloudFog':
+        return <CloudFog size={size} color={iconColor} />;
+      case 'CloudDrizzle':
+        return <CloudDrizzle size={size} color={iconColor} />;
+      case 'CloudRain':
+        return <CloudRain size={size} color={iconColor} />;
+      case 'Snowflake':
+        return <Snowflake size={size} color={iconColor} />;
+      case 'CloudLightning':
+        return <CloudLightning size={size} color={iconColor} />;
+      default:
+        return <Thermometer size={size} color={iconColor} />;
+    }
+  };
 
   return (
     <View style={[styles.container, isDark ? styles.containerDark : styles.containerLight]}>
@@ -114,47 +231,53 @@ export const LandingSearch: React.FC<LandingSearchProps> = ({
           style={[styles.themeBtn, isDark ? styles.themeBtnDark : styles.themeBtnLight]}
           onPress={onToggleTheme}
           activeOpacity={0.7}
+          accessibilityLabel="Alternar tema claro/escuro"
         >
-          {isDark ? <Sun size={15} color="#ffd60a" /> : <Moon size={15} color="#1d1d1f" />}
+          {isDark ? <Sun size={16} color="#ffd60a" /> : <Moon size={16} color="#1d1d1f" />}
         </TouchableOpacity>
       </View>
 
       {/* Center Search Experience */}
       <View style={styles.centerContent}>
-        {/* Brand Icon & Heading */}
-        <View style={styles.headerBlock}>
-          <View style={[styles.brandIconWrap, isDark ? styles.brandIconDark : styles.brandIconLight]}>
-            <Globe2 size={24} color={isDark ? '#64b5f6' : '#0071e3'} />
+        {/* Hero Section */}
+        <View style={styles.heroBlock}>
+          <View style={[styles.logoBadge, isDark ? styles.logoBadgeDark : styles.logoBadgeLight]}>
+            <Globe2 size={28} color={isDark ? '#64b5f6' : '#0071e3'} />
           </View>
-          <Text style={[styles.brandTitle, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
+          <Text style={[styles.heroTitle, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
             TerraData
           </Text>
-          <Text style={[styles.brandSubtitle, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
-            Agregador Geográfico e Meteorológico
+          <Text style={[styles.heroTagline, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
+            Clima, cultura e roteiros para qualquer cidade
           </Text>
         </View>
 
-        {/* Spotlight Search Box */}
+        {/* Search Box with Inline "Buscar" Button */}
         <View style={styles.searchWrapper}>
           <View
             style={[
-              styles.searchBox,
-              isDark ? styles.searchBoxDark : styles.searchBoxLight,
-              isFocused && (isDark ? styles.searchBoxFocusedDark : styles.searchBoxFocusedLight),
+              styles.searchField,
+              isDark ? styles.searchFieldDark : styles.searchFieldLight,
+              isFocused && (isDark ? styles.searchFieldFocusedDark : styles.searchFieldFocusedLight),
             ]}
           >
-            <Search size={18} color={isFocused ? (isDark ? '#64b5f6' : '#0071e3') : '#86868b'} style={styles.searchIcon} />
+            <Search
+              size={18}
+              color={isFocused ? (isDark ? '#64b5f6' : '#0071e3') : '#86868b'}
+              style={styles.searchIcon}
+            />
             <TextInput
               style={[
                 styles.searchInput,
                 { outlineStyle: 'none', outline: 'none' } as any,
                 isDark ? styles.textPrimaryDark : styles.textPrimaryLight,
               ]}
-              placeholder="Digite o nome de uma cidade (ex: Salvador, Tóquio, Paris)..."
+              placeholder="Digite uma cidade, como Salvador, Tóquio ou Paris"
               placeholderTextColor={isDark ? '#6e6e73' : '#86868b'}
               value={searchQuery}
               onChangeText={setSearchQuery}
-              autoFocus={true}
+              onSubmitEditing={handleManualSearch}
+              returnKeyType="search"
               onFocus={() => {
                 setIsFocused(true);
                 if (suggestions.length > 0) setShowDropdown(true);
@@ -163,9 +286,11 @@ export const LandingSearch: React.FC<LandingSearchProps> = ({
                 setIsFocused(false);
               }}
             />
+
             {isSearching && (
               <ActivityIndicator size="small" color="#0071e3" style={styles.spinner} />
             )}
+
             {searchQuery.length > 0 && !isSearching && (
               <TouchableOpacity
                 onPress={() => {
@@ -174,10 +299,19 @@ export const LandingSearch: React.FC<LandingSearchProps> = ({
                   setShowDropdown(false);
                 }}
                 style={styles.clearBtn}
+                accessibilityLabel="Limpar busca"
               >
-                <X size={16} color="#86868b" />
+                <X size={15} color="#86868b" />
               </TouchableOpacity>
             )}
+
+            <TouchableOpacity
+              style={[styles.goButton, isDark ? styles.goButtonDark : styles.goButtonLight]}
+              onPress={handleManualSearch}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.goButtonText}>Buscar</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Autocomplete Suggestions Dropdown */}
@@ -188,7 +322,11 @@ export const LandingSearch: React.FC<LandingSearchProps> = ({
                 isDark ? styles.dropdownDark : styles.dropdownLight,
               ]}
             >
-              <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <ScrollView
+                style={{ maxHeight: 300 }}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+              >
                 {suggestions.map((city, idx) => (
                   <TouchableOpacity
                     key={`${city.id}-${idx}`}
@@ -235,7 +373,7 @@ export const LandingSearch: React.FC<LandingSearchProps> = ({
 
         {/* GPS Quick Action Button */}
         <TouchableOpacity
-          style={[styles.gpsActionBtn, isDark ? styles.gpsBtnDark : styles.gpsBtnLight]}
+          style={[styles.geoPillBtn, isDark ? styles.geoPillDark : styles.geoPillLight]}
           onPress={onCurrentLocation}
           disabled={isLoadingLocation}
           activeOpacity={0.75}
@@ -243,58 +381,140 @@ export const LandingSearch: React.FC<LandingSearchProps> = ({
           {isLoadingLocation ? (
             <ActivityIndicator size="small" color="#0071e3" />
           ) : (
-            <Navigation size={14} color={isDark ? '#64b5f6' : '#0071e3'} />
+            <Navigation size={15} color={isDark ? '#64b5f6' : '#0071e3'} />
           )}
-          <Text style={[styles.gpsActionText, isDark ? styles.gpsTextDark : styles.gpsTextLight]}>
-            {isLoadingLocation ? 'Localizando...' : 'Minha localização atual'}
+          <Text style={[styles.geoPillText, isDark ? styles.geoTextDark : styles.geoTextLight]}>
+            {isLoadingLocation ? 'Localizando…' : 'Usar minha localização'}
           </Text>
         </TouchableOpacity>
 
-        {/* Cached City Quick Resume Card */}
-        {cachedCity && (
-          <View style={styles.cacheWrapper}>
-            <Text style={[styles.cacheHeading, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
-              ÚLTIMA CIDADE VISITADA
-            </Text>
-            <View style={[styles.cacheCard, isDark ? styles.cacheCardDark : styles.cacheCardLight]}>
-              <TouchableOpacity
-                style={styles.cacheClickArea}
-                onPress={() => onSelectCity(cachedCity)}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.cacheIconWrap, isDark ? styles.cacheIconWrapDark : styles.cacheIconWrapLight]}>
-                  <MapPin size={18} color={isDark ? '#64b5f6' : '#0071e3'} />
-                </View>
-                <View style={styles.cacheInfo}>
-                  <Text style={[styles.cacheCityName, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
-                    Continuar em {cachedCity.name}
-                  </Text>
-                  <Text style={[styles.cacheRegion, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
-                    {[cachedCity.admin1, cachedCity.country].filter(Boolean).join(' • ')}
-                  </Text>
-                </View>
-                <View style={styles.cacheArrowWrap}>
-                  <ArrowRight size={16} color={isDark ? '#64b5f6' : '#0071e3'} />
-                </View>
-              </TouchableOpacity>
 
-              {/* Forget button */}
-              <TouchableOpacity
-                style={styles.cacheForgetBtn}
-                onPress={onClearCache}
-                activeOpacity={0.6}
-              >
-                <Trash2 size={13} color="#86868b" />
-              </TouchableOpacity>
+
+        {/* Recent Visited Cities (NO EMOJIS, real weather & clean Lucide icons) */}
+        {activeRecentCities.length > 0 && (
+          <View style={styles.recentsSection}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={[styles.sectionHeading, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
+                Visitadas recentemente
+              </Text>
+              {(onClearRecentCities || onClearCache) && (
+                <TouchableOpacity
+                  onPress={onClearRecentCities || onClearCache}
+                  activeOpacity={0.65}
+                  style={styles.clearHistoryBtn}
+                >
+                  <Text style={[styles.clearHistoryText, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
+                    Limpar histórico
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <View style={styles.recentsList}>
+              {activeRecentCities.map((city, idx) => {
+                const key = `${city.name}_${city.latitude.toFixed(2)}_${city.longitude.toFixed(2)}`;
+                const w = weatherMap[key];
+
+                return (
+                  <View
+                    key={`${city.name}-${city.latitude}-${idx}`}
+                    style={[styles.recentCard, isDark ? styles.recentCardDark : styles.recentCardLight]}
+                  >
+                    <TouchableOpacity
+                      style={styles.recentClickArea}
+                      onPress={() => onSelectCity(city)}
+                      activeOpacity={0.7}
+                    >
+                      {/* Weather Icon in Soft Rounded Box (NO EMOJIS) */}
+                      <View style={[styles.weatherBox, isDark ? styles.weatherBoxDark : styles.weatherBoxLight]}>
+                        {renderWeatherIcon(w)}
+                      </View>
+
+                      {/* City Name & Region */}
+                      <View style={styles.recentInfo}>
+                        <Text
+                          style={[styles.recentCityName, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}
+                          numberOfLines={1}
+                        >
+                          {city.name}
+                        </Text>
+                        <Text
+                          style={[styles.recentRegion, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}
+                          numberOfLines={1}
+                        >
+                          {[city.admin1, city.country].filter(Boolean).join(' • ')}
+                        </Text>
+                      </View>
+
+                      {/* Real Temperature & Condition */}
+                      <View style={styles.recentTempWrap}>
+                        {w ? (
+                          <>
+                            <Text style={[styles.recentTempText, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
+                              {w.temperature}°C
+                            </Text>
+                            <Text
+                              style={[styles.recentConditionText, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}
+                              numberOfLines={1}
+                            >
+                              {w.conditionLabel}
+                            </Text>
+                          </>
+                        ) : (
+                          <View style={[styles.tempSkeleton, isDark ? styles.tempSkeletonDark : styles.tempSkeletonLight]} />
+                        )}
+                      </View>
+                    </TouchableOpacity>
+
+                    {/* Remove single city */}
+                    {(onRemoveRecentCity || onClearCache) && (
+                      <TouchableOpacity
+                        style={styles.removeRecentBtn}
+                        onPress={() => {
+                          if (onRemoveRecentCity) {
+                            onRemoveRecentCity(city);
+                          } else if (onClearCache) {
+                            onClearCache();
+                          }
+                        }}
+                        activeOpacity={0.6}
+                        accessibilityLabel={`Remover ${city.name} do histórico`}
+                      >
+                        <X size={15} color="#86868b" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              })}
             </View>
           </View>
         )}
       </View>
 
-      {/* Minimalist Footer */}
+      {/* Refined Apple Footer with Static Pages Navigation */}
       <View style={styles.footer}>
+        <View style={styles.footerNav}>
+          <TouchableOpacity onPress={() => router.push('/sobre')} activeOpacity={0.6}>
+            <Text style={[styles.footerLink, isDark ? styles.footerLinkDark : styles.footerLinkLight]}>
+              Sobre
+            </Text>
+          </TouchableOpacity>
+          <Text style={styles.footerDot}>•</Text>
+          <TouchableOpacity onPress={() => router.push('/fontes')} activeOpacity={0.6}>
+            <Text style={[styles.footerLink, isDark ? styles.footerLinkDark : styles.footerLinkLight]}>
+              Fontes de dados
+            </Text>
+          </TouchableOpacity>
+          <Text style={styles.footerDot}>•</Text>
+          <TouchableOpacity onPress={() => router.push('/contato')} activeOpacity={0.6}>
+            <Text style={[styles.footerLink, isDark ? styles.footerLinkDark : styles.footerLinkLight]}>
+              Contato
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         <Text style={[styles.footerText, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
-          TerraData
+          Clima por Open-Meteo · © {new Date().getFullYear()} TerraData
         </Text>
       </View>
     </View>
@@ -307,141 +527,164 @@ const styles = StyleSheet.create({
     minHeight: '100vh',
     width: '100%',
     justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingVertical: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
   },
   containerLight: {
-    backgroundColor: '#fbfbfd',
+    backgroundColor: '#f6f8fc',
   },
   containerDark: {
-    backgroundColor: '#000000',
+    backgroundColor: '#0d1219',
   },
   topBar: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
+    alignItems: 'center',
     width: '100%',
-    maxWidth: 900,
+    maxWidth: 680,
     alignSelf: 'center',
+    paddingVertical: 4,
   },
   themeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
   },
   themeBtnLight: {
-    backgroundColor: '#f0f0f2',
+    backgroundColor: '#ffffff',
+    borderColor: '#d5dded',
   },
   themeBtnDark: {
-    backgroundColor: '#2c2c2e',
+    backgroundColor: '#161e29',
+    borderColor: '#2a3646',
   },
   centerContent: {
     width: '100%',
-    maxWidth: 580,
+    maxWidth: 640,
     alignSelf: 'center',
     alignItems: 'center',
-    gap: 20,
-    marginVertical: 'auto',
+    gap: 22,
+    marginVertical: 28,
   },
-  headerBlock: {
+  heroBlock: {
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
+    textAlign: 'center',
     marginBottom: 6,
   },
-  brandIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
+  logoBadge: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
   },
-  brandIconLight: {
-    backgroundColor: '#eef5ff',
+  logoBadgeLight: {
+    backgroundColor: '#e5effd',
   },
-  brandIconDark: {
+  logoBadgeDark: {
     backgroundColor: 'rgba(10, 132, 255, 0.15)',
   },
-  brandTitle: {
-    fontSize: 38,
-    fontWeight: '700',
-    letterSpacing: -1,
+  heroTitle: {
+    fontSize: 40,
+    fontWeight: '750',
+    letterSpacing: -1.2,
+    textAlign: 'center',
   },
-  brandAccent: {
-    color: '#0071e3',
-  },
-  brandSubtitle: {
-    fontSize: 15,
+  heroTagline: {
+    fontSize: 17,
     fontWeight: '400',
+    textAlign: 'center',
+    maxWidth: 380,
   },
   searchWrapper: {
     width: '100%',
     position: 'relative',
     zIndex: 200,
   },
-  searchBox: {
+  searchField: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 54,
-    borderRadius: 27,
-    paddingHorizontal: 18,
+    height: 58,
+    borderRadius: 999,
+    paddingLeft: 18,
+    paddingRight: 8,
     borderWidth: 1,
-    boxShadow: '0 6px 18px rgba(0, 0, 0, 0.04)',
+    boxShadow: '0 4px 20px rgba(16, 24, 40, 0.06)',
   },
-  searchBoxLight: {
+  searchFieldLight: {
     backgroundColor: '#ffffff',
-    borderColor: 'rgba(0, 0, 0, 0.08)',
+    borderColor: '#d5dded',
   },
-  searchBoxDark: {
-    backgroundColor: '#1c1c1e',
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+  searchFieldDark: {
+    backgroundColor: '#161e29',
+    borderColor: '#2a3646',
   },
-  searchBoxFocusedLight: {
-    borderColor: '#0071e3',
-    boxShadow: '0 0 16px rgba(0, 113, 227, 0.12)',
+  searchFieldFocusedLight: {
+    borderColor: '#0b6fe0',
+    boxShadow: '0 0 0 3px rgba(11, 111, 224, 0.15), 0 4px 20px rgba(16, 24, 40, 0.08)',
   },
-  searchBoxFocusedDark: {
-    borderColor: '#64b5f6',
-    boxShadow: '0 0 16px rgba(100, 181, 246, 0.22)',
+  searchFieldFocusedDark: {
+    borderColor: '#5aa2ff',
+    boxShadow: '0 0 0 3px rgba(90, 162, 255, 0.2), 0 4px 20px rgba(0, 0, 0, 0.3)',
   },
   searchIcon: {
-    marginRight: 12,
+    marginRight: 10,
   },
   searchInput: {
     flex: 1,
     height: '100%',
-    fontSize: 15,
-    outlineWidth: 0,
-    outlineStyle: 'none' as any,
+    fontSize: 16,
     fontWeight: '400',
   },
   spinner: {
-    marginLeft: 8,
+    marginRight: 8,
   },
   clearBtn: {
-    marginLeft: 8,
-    padding: 4,
+    marginRight: 8,
+    padding: 6,
+  },
+  goButton: {
+    height: 42,
+    paddingHorizontal: 20,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  goButtonLight: {
+    backgroundColor: '#0b6fe0',
+  },
+  goButtonDark: {
+    backgroundColor: '#5aa2ff',
+  },
+  goButtonText: {
+    color: '#ffffff',
+    fontWeight: '600',
+    fontSize: 14,
   },
   dropdownContainer: {
     position: 'absolute',
-    top: 62,
-    left: 0,
-    right: 0,
-    borderRadius: 22,
+    top: 66,
+    left: 8,
+    right: 8,
+    borderRadius: 20,
     maxHeight: 300,
-    boxShadow: '0 16px 30px rgba(0, 0, 0, 0.08)',
+    boxShadow: '0 16px 36px rgba(0, 0, 0, 0.1)',
     zIndex: 999,
     overflow: 'hidden',
     borderWidth: 1,
   },
   dropdownLight: {
     backgroundColor: '#ffffff',
-    borderColor: 'rgba(0, 0, 0, 0.06)',
+    borderColor: '#d5dded',
   },
   dropdownDark: {
-    backgroundColor: '#2c2c2e',
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: '#161e29',
+    borderColor: '#2a3646',
   },
   dropdownItem: {
     flexDirection: 'row',
@@ -459,13 +702,13 @@ const styles = StyleSheet.create({
   pinCircle: {
     width: 28,
     height: 28,
-    borderRadius: 9,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
   pinCircleLight: {
-    backgroundColor: '#eef5ff',
+    backgroundColor: '#e5effd',
   },
   pinCircleDark: {
     backgroundColor: 'rgba(10, 132, 255, 0.15)',
@@ -490,131 +733,194 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   fuzzyBadgeLight: {
-    backgroundColor: 'rgba(0, 113, 227, 0.08)',
+    backgroundColor: 'rgba(11, 111, 224, 0.08)',
   },
   fuzzyBadgeDark: {
-    backgroundColor: 'rgba(100, 181, 246, 0.15)',
+    backgroundColor: 'rgba(90, 162, 255, 0.15)',
   },
   fuzzyBadgeText: {
     fontSize: 10,
     fontWeight: '600',
   },
   fuzzyBadgeTextLight: {
-    color: '#0071e3',
+    color: '#0b6fe0',
   },
   fuzzyBadgeTextDark: {
-    color: '#64b5f6',
+    color: '#5aa2ff',
   },
-  gpsActionBtn: {
+  geoPillBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
-    paddingVertical: 9,
-    paddingHorizontal: 16,
-    borderRadius: 18,
+    gap: 8,
+    height: 44,
+    paddingHorizontal: 20,
+    borderRadius: 999,
   },
-  gpsBtnLight: {
-    backgroundColor: '#eef5ff',
+  geoPillLight: {
+    backgroundColor: '#e5effd',
   },
-  gpsBtnDark: {
+  geoPillDark: {
     backgroundColor: 'rgba(10, 132, 255, 0.15)',
   },
-  gpsActionText: {
-    fontSize: 13,
+  geoPillText: {
+    fontSize: 14,
     fontWeight: '600',
   },
-  gpsTextLight: {
-    color: '#0071e3',
+  geoTextLight: {
+    color: '#0a58b4',
   },
-  gpsTextDark: {
-    color: '#64b5f6',
+  geoTextDark: {
+    color: '#8bbdff',
   },
-  cacheWrapper: {
+
+  recentsSection: {
     width: '100%',
-    marginTop: 14,
-    gap: 8,
+    marginTop: 10,
   },
-  cacheHeading: {
-    fontSize: 10,
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 10,
+    paddingHorizontal: 4,
+  },
+  sectionHeading: {
+    fontSize: 14,
     fontWeight: '700',
-    letterSpacing: 0.6,
-    textAlign: 'center',
+    letterSpacing: -0.2,
   },
-  cacheCard: {
+  clearHistoryBtn: {
+    padding: 4,
+  },
+  clearHistoryText: {
+    fontSize: 12,
+    textDecorationLine: 'underline',
+  },
+  recentsList: {
+    gap: 10,
+  },
+  recentCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 20,
+    borderRadius: 18,
     paddingVertical: 10,
-    paddingHorizontal: 16,
+    paddingLeft: 12,
+    paddingRight: 6,
     borderWidth: 1,
-    boxShadow: '0 4px 14px rgba(0, 0, 0, 0.03)',
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.03)',
   },
-  cacheCardLight: {
+  recentCardLight: {
     backgroundColor: '#ffffff',
-    borderColor: 'rgba(0, 0, 0, 0.04)',
+    borderColor: '#d5dded',
   },
-  cacheCardDark: {
-    backgroundColor: '#1c1c1e',
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+  recentCardDark: {
+    backgroundColor: '#161e29',
+    borderColor: '#2a3646',
   },
-  cacheClickArea: {
+  recentClickArea: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    minWidth: 0,
   },
-  cacheIconWrap: {
-    width: 38,
-    height: 38,
+  weatherBox: {
+    width: 42,
+    height: 42,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
-  cacheIconWrapLight: {
-    backgroundColor: '#eef5ff',
+  weatherBoxLight: {
+    backgroundColor: '#e5effd',
   },
-  cacheIconWrapDark: {
-    backgroundColor: 'rgba(10, 132, 255, 0.15)',
+  weatherBoxDark: {
+    backgroundColor: '#1b2c45',
   },
-  cacheInfo: {
+  recentInfo: {
     flex: 1,
+    minWidth: 0,
   },
-  cacheCityName: {
-    fontSize: 14,
-    fontWeight: '600',
+  recentCityName: {
+    fontSize: 15,
+    fontWeight: '650',
+    letterSpacing: -0.2,
   },
-  cacheRegion: {
-    fontSize: 11,
+  recentRegion: {
+    fontSize: 12,
     marginTop: 2,
   },
-  cacheArrowWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+  recentTempWrap: {
+    alignItems: 'flex-end',
+    paddingHorizontal: 8,
+  },
+  recentTempText: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  recentConditionText: {
+    fontSize: 11,
+    marginTop: 2,
+    maxWidth: 110,
+    textAlign: 'right',
+  },
+  tempSkeleton: {
+    width: 44,
+    height: 18,
+    borderRadius: 6,
+  },
+  tempSkeletonLight: {
+    backgroundColor: '#e8e8ed',
+  },
+  tempSkeletonDark: {
+    backgroundColor: '#2c2c2e',
+  },
+  removeRecentBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cacheForgetBtn: {
-    padding: 8,
-    marginLeft: 6,
-  },
   footer: {
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 16,
+    gap: 8,
   },
-  footerText: {
-    fontSize: 11,
+  footerNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
-  textPrimaryLight: {
-    color: '#1d1d1f',
+  footerLink: {
+    fontSize: 13,
+    fontWeight: '500',
   },
-  textPrimaryDark: {
-    color: '#f5f5f7',
+  footerLinkLight: {
+    color: '#556070',
   },
-  textSecondaryLight: {
+  footerLinkDark: {
+    color: '#9eabbd',
+  },
+  footerDot: {
+    fontSize: 12,
     color: '#86868b',
   },
+  footerText: {
+    fontSize: 12,
+  },
+  textPrimaryLight: {
+    color: '#0f1722',
+  },
+  textPrimaryDark: {
+    color: '#eef2f8',
+  },
+  textSecondaryLight: {
+    color: '#556070',
+  },
   textSecondaryDark: {
-    color: '#a1a1a6',
+    color: '#9eabbd',
   },
 });

@@ -99,6 +99,16 @@ body,
   overflow-x: hidden;
 }
 
+/* Remove formatação padrão de links dos navegadores */
+a,
+a:visited,
+a:hover,
+a:active {
+  text-decoration: none !important;
+  color: inherit;
+  outline: none;
+}
+
 /* Remove completamente o outline preto padrão dos navegadores ao focar em inputs */
 input,
 textarea,

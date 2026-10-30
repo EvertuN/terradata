@@ -1,4 +1,5 @@
 ﻿import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useRouter } from 'next/router';
 import {
   View,
   Text,
@@ -40,10 +41,15 @@ import { SnapshotModal } from '../components/SnapshotModal';
 import { DashboardSkeleton } from '../components/DashboardSkeleton';
 import { Toast, ToastProps } from '../components/Toast';
 
+const RECENT_CITIES_KEY = 'terradata:recentes';
+const MAX_RECENT_CITIES = 4;
+
 export default function HomePage() {
+  const router = useRouter();
   const [viewState, setViewState] = useState<'search' | 'dashboard'>('search');
   const [currentCity, setCurrentCity] = useState<City | null>(null);
   const [cachedCity, setCachedCity] = useState<City | null>(null);
+  const [recentCities, setRecentCities] = useState<City[]>([]);
 
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [airQuality, setAirQuality] = useState<AirQualityData | null>(null);
@@ -86,15 +92,25 @@ export default function HomePage() {
       }
 
       try {
-        const rawLastCity = localStorage.getItem('terradata_last_city') || localStorage.getItem('urbanpulse_last_city');
-        if (rawLastCity) {
-          const parsed = JSON.parse(rawLastCity);
-          if (parsed && parsed.name) {
-            setCachedCity(parsed);
+        const rawRecents = localStorage.getItem(RECENT_CITIES_KEY) || localStorage.getItem('terradata_recent_cities');
+        if (rawRecents) {
+          const parsed = JSON.parse(rawRecents);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setRecentCities(parsed);
+            setCachedCity(parsed[0]);
+          }
+        } else {
+          const rawLastCity = localStorage.getItem('terradata_last_city') || localStorage.getItem('urbanpulse_last_city');
+          if (rawLastCity) {
+            const parsed = JSON.parse(rawLastCity);
+            if (parsed && parsed.name) {
+              setRecentCities([parsed]);
+              setCachedCity(parsed);
+            }
           }
         }
       } catch (e) {
-        console.warn('Could not parse cached city', e);
+        console.warn('Could not parse cached cities', e);
       }
     }
   }, []);
@@ -118,14 +134,42 @@ export default function HomePage() {
     showToast(`Unidade alterada para °${nextUnit}`, 'info');
   };
 
-  const handleClearCache = () => {
+  const handleClearRecentCities = useCallback(() => {
     if (typeof window !== 'undefined') {
+      localStorage.removeItem(RECENT_CITIES_KEY);
+      localStorage.removeItem('terradata_recent_cities');
       localStorage.removeItem('terradata_last_city');
       localStorage.removeItem('urbanpulse_last_city');
     }
+    setRecentCities([]);
     setCachedCity(null);
     showToast('Histórico limpo com sucesso', 'info');
-  };
+  }, [showToast]);
+
+  const handleRemoveRecentCity = useCallback((cityToRemove: City) => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = localStorage.getItem(RECENT_CITIES_KEY) || localStorage.getItem('terradata_recent_cities');
+      const list = raw ? JSON.parse(raw) : [];
+      const updated = list.filter(
+        (c) => !(Math.abs(c.latitude - cityToRemove.latitude) < 0.01 && Math.abs(c.longitude - cityToRemove.longitude) < 0.01) && c.name !== cityToRemove.name
+      );
+      localStorage.setItem(RECENT_CITIES_KEY, JSON.stringify(updated));
+      if (updated.length > 0) {
+        localStorage.setItem('terradata_last_city', JSON.stringify(updated[0]));
+        setCachedCity(updated[0]);
+      } else {
+        localStorage.removeItem('terradata_last_city');
+        setCachedCity(null);
+      }
+      setRecentCities(updated);
+      showToast(`${cityToRemove.name} removida do histórico`, 'info');
+    } catch {
+      // ignore
+    }
+  }, [showToast]);
+
+  const handleClearCache = handleClearRecentCities;
 
   // City selection handler: saves to cache and navigates to dashboard
   const handleSelectCity = useCallback(
@@ -140,7 +184,20 @@ export default function HomePage() {
       setIsAiAvailable(true);
       setIsLoading(true);
       if (typeof window !== 'undefined') {
-        localStorage.setItem('terradata_last_city', JSON.stringify(city));
+        try {
+          const raw = localStorage.getItem(RECENT_CITIES_KEY) || localStorage.getItem('terradata_recent_cities');
+          const list = raw ? JSON.parse(raw) : [];
+          const filtered = list.filter(
+            (c) => !(Math.abs(c.latitude - city.latitude) < 0.01 && Math.abs(c.longitude - city.longitude) < 0.01) && c.name !== city.name
+          );
+          filtered.unshift(city);
+          const updated = filtered.slice(0, MAX_RECENT_CITIES);
+          localStorage.setItem(RECENT_CITIES_KEY, JSON.stringify(updated));
+          localStorage.setItem('terradata_last_city', JSON.stringify(city));
+          setRecentCities(updated);
+        } catch {
+          localStorage.setItem('terradata_last_city', JSON.stringify(city));
+        }
       }
       setViewState('dashboard');
     },
@@ -325,6 +382,9 @@ export default function HomePage() {
           onSelectCity={handleSelectCity}
           onCurrentLocation={handleCurrentLocation}
           isLoadingLocation={isLoadingLocation}
+          recentCities={recentCities}
+          onRemoveRecentCity={handleRemoveRecentCity}
+          onClearRecentCities={handleClearRecentCities}
           cachedCity={cachedCity}
           onClearCache={handleClearCache}
           theme={theme}
@@ -594,8 +654,27 @@ export default function HomePage() {
 
         {/* Minimalist Apple Footer */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>
-            TerraData
+          <View style={styles.footerNav}>
+            <TouchableOpacity onPress={() => router.push('/sobre')} activeOpacity={0.6}>
+              <Text style={[styles.footerLink, isDark ? styles.footerLinkDark : styles.footerLinkLight]}>
+                Sobre
+              </Text>
+            </TouchableOpacity>
+            <Text style={styles.footerDot}>•</Text>
+            <TouchableOpacity onPress={() => router.push('/fontes')} activeOpacity={0.6}>
+              <Text style={[styles.footerLink, isDark ? styles.footerLinkDark : styles.footerLinkLight]}>
+                Fontes de dados
+              </Text>
+            </TouchableOpacity>
+            <Text style={styles.footerDot}>•</Text>
+            <TouchableOpacity onPress={() => router.push('/contato')} activeOpacity={0.6}>
+              <Text style={[styles.footerLink, isDark ? styles.footerLinkDark : styles.footerLinkLight]}>
+                Contato
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={[styles.footerText, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
+            Clima por Open-Meteo · © {new Date().getFullYear()} TerraData
           </Text>
         </View>
       </ScrollView>
@@ -697,6 +776,27 @@ const styles = StyleSheet.create({
     paddingVertical: 28,
     alignItems: 'center',
     marginTop: 16,
+  },
+  footerNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  footerLink: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  footerLinkLight: {
+    color: '#556070',
+  },
+  footerLinkDark: {
+    color: '#9eabbd',
+  },
+  footerDot: {
+    fontSize: 12,
+    color: '#86868b',
   },
   footerText: {
     color: '#86868b',
