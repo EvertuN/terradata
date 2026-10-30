@@ -16,6 +16,8 @@ interface AIItinerarySectionProps {
   city: City;
   weather?: WeatherData | null;
   theme: 'dark' | 'light';
+  isAiAvailable?: boolean;
+  onAiUnavailable?: () => void;
 }
 
 const DURATIONS: ItineraryDuration[] = ['Meio dia', '1 dia', '2 dias', '3 dias'];
@@ -24,7 +26,13 @@ const TRANSPORTS: ItineraryTransport[] = ['Carro', 'Moto', 'A pé', 'Bicicleta',
 // Colors per stop index
 const STOP_COLORS = ['#0071e3', '#10b981', '#f59e0b', '#8b5cf6', '#f97316', '#ef4444', '#06b6d4', '#ec4899'];
 
-export const AIItinerarySection: React.FC<AIItinerarySectionProps> = ({ city, weather, theme }) => {
+export const AIItinerarySection: React.FC<AIItinerarySectionProps> = ({
+  city,
+  weather,
+  theme,
+  isAiAvailable = true,
+  onAiUnavailable,
+}) => {
   const isDark = theme === 'dark';
 
   const [preferences, setPreferences] = useState('');
@@ -33,6 +41,11 @@ export const AIItinerarySection: React.FC<AIItinerarySectionProps> = ({ city, we
   const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState<AIItinerary | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // If AI is offline, do not show the create itinerary section
+  if (!isAiAvailable) {
+    return null;
+  }
 
   const canGenerate = !isGenerating && transport !== null;
 
@@ -70,9 +83,14 @@ export const AIItinerarySection: React.FC<AIItinerarySectionProps> = ({ city, we
         signal: AbortSignal.timeout ? AbortSignal.timeout(30000) : undefined,
       });
 
-      const data = (await res.json()) as Record<string, unknown>;
+      const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
 
       if (!res.ok) {
+        if (res.status >= 500 || res.status === 404) {
+          // AI service is offline/disabled -> Hide the section gracefully
+          onAiUnavailable?.();
+          return;
+        }
         const msg = typeof data.error === 'string' ? data.error : 'Erro ao gerar roteiro.';
         setErrorMsg(msg);
         return;
@@ -83,12 +101,13 @@ export const AIItinerarySection: React.FC<AIItinerarySectionProps> = ({ city, we
       if (err instanceof Error && err.name === 'AbortError') {
         setErrorMsg('A requisição demorou demais. Tente novamente.');
       } else {
-        setErrorMsg('Não foi possível conectar ao servidor. Verifique sua conexão.');
+        // Network failure or AI down -> hide creation section
+        onAiUnavailable?.();
       }
     } finally {
       setIsGenerating(false);
     }
-  }, [canGenerate, transport, city.name, city.admin1, city.country, weather?.current?.weatherCode, weather?.current?.temperature, preferences, duration]);
+  }, [canGenerate, transport, city.name, city.admin1, city.country, weather?.current?.weatherCode, weather?.current?.temperature, preferences, duration, onAiUnavailable]);
 
   const buildMapsUrl = (stop: AIItineraryStop) =>
     stop.mapsUrl ||

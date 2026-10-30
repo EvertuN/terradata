@@ -58,6 +58,7 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState<'all' | 'weather' | 'air' | 'map' | 'pois' | 'nearby'>('all');
   const [toast, setToast] = useState<Omit<ToastProps, 'onClose'> | null>(null);
   const [isSnapshotOpen, setIsSnapshotOpen] = useState<boolean>(false);
+  const [isAiAvailable, setIsAiAvailable] = useState<boolean>(true);
   const activeCityIdRef = useRef<number | null>(null);
 
   const showToast = useCallback(
@@ -136,6 +137,7 @@ export default function HomePage() {
       setCitySummary(null);
       setPois([]);
       setNearbyCities([]);
+      setIsAiAvailable(true);
       setIsLoading(true);
       if (typeof window !== 'undefined') {
         localStorage.setItem('terradata_last_city', JSON.stringify(city));
@@ -556,8 +558,22 @@ export default function HomePage() {
             {(activeTab === 'all' || activeTab === 'pois') && (
               <View style={styles.sectionWrap}>
                 <POIsSection pois={pois} theme={theme} />
-                <OneDayItinerary city={currentCity} weather={weather} theme={theme} />
-                <AIItinerarySection city={currentCity} weather={weather} theme={theme} />
+                <OneDayItinerary
+                  city={currentCity}
+                  pois={pois}
+                  weather={weather}
+                  theme={theme}
+                  onAiStatusChange={setIsAiAvailable}
+                />
+                {isAiAvailable && (
+                  <AIItinerarySection
+                    city={currentCity}
+                    weather={weather}
+                    theme={theme}
+                    isAiAvailable={isAiAvailable}
+                    onAiUnavailable={() => setIsAiAvailable(false)}
+                  />
+                )}
               </View>
             )}
 

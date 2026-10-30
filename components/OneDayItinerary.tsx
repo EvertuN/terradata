@@ -1,30 +1,256 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking, ActivityIndicator } from 'react-native';
-import { Compass, ExternalLink, MapPin, Sparkles, AlertCircle } from 'lucide-react';
-import { City, WeatherData, AIItinerary, AIItineraryStop } from '../types';
+import { Compass, ExternalLink, MapPin, Sparkles } from 'lucide-react';
+import { City, WeatherData, PointOfInterest, AIItinerary, AIItineraryStop } from '../types';
 import { ApiService } from '../services/api';
+import { LazyImage } from './LazyImage';
 
 interface OneDayItineraryProps {
   city: City;
+  pois?: PointOfInterest[];
   weather?: WeatherData | null;
   theme: 'dark' | 'light';
+  onAiStatusChange?: (isOnline: boolean) => void;
+}
+
+interface DisplayStop {
+  shift: string;
+  hour: string;
+  themeColor: string;
+  title: string;
+  extract: string;
+  category: string;
+  tip?: string;
+  distFormatted?: string;
+  thumbnail?: string | null;
+  mapsUrl: string;
 }
 
 const SHIFT_THEME_COLORS = ['#ca8a04', '#10b981', '#f97316', '#8b5cf6'];
 
-export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({ city, weather, theme }) => {
+export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({
+  city,
+  pois = [],
+  weather,
+  theme,
+  onAiStatusChange,
+}) => {
   const isDark = theme === 'dark';
 
-  const [itinerary, setItinerary] = useState<AIItinerary | null>(null);
+  const [aiItinerary, setAiItinerary] = useState<AIItinerary | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
 
+  // 1. Classical Wiki/SPARQL Smart Matching Algorithm (Guaranteed Fallback)
+  const wikiFallbackStops = useMemo<DisplayStop[]>(() => {
+    const list = [...pois];
+    const usedIds = new Set<string | number>();
+
+    const FOOD_KEYWORDS = [
+      'café', 'cafe', 'cafeteria', 'padaria', 'confeitaria', 'bistrô', 'bistro',
+      'mercado municipal', 'lanche', 'gastronomia', 'quitanda', 'doceria', 'brunch',
+    ];
+
+    const NATURE_KEYWORDS = [
+      'parque', 'jardim', 'botânico', 'ecol', 'natureza', 'bosque', 'horto',
+      'cachoeira', 'cascata', 'lago', 'lagoa', 'represa', 'floresta', 'reserva',
+      'trilha', 'rio', 'zoológico', 'zoologico',
+    ];
+
+    const SUNSET_KEYWORDS = [
+      'mirante', 'morro', 'serra', 'montanha', 'pico', 'vista', 'panorâm', 'panoram',
+      'orla', 'praia', 'deck', 'farol', 'ponte', 'elevado', 'mirador', 'cruzeiro',
+    ];
+
+    const NIGHT_KEYWORDS = [
+      'teatro', 'centro cultural', 'cinema', 'restaurante', 'gastronomia', 'bar',
+      'choperia', 'boulevard', 'calçadão', 'calcadao', 'noturno', 'noite', 'avenida',
+      'polo gastronômico', 'casa de show', 'show',
+    ];
+
+    const CULTURE_KEYWORDS = [
+      'museu', 'memorial', 'catedral', 'igreja', 'santuário', 'santuario', 'basílica',
+      'basilica', 'capela', 'palácio', 'palacio', 'solar', 'histórico', 'historico',
+      'patrimônio', 'patrimonio', 'estação', 'estacao', 'monumento', 'praça',
+    ];
+
+    const scorePoi = (p: PointOfInterest, keywords: string[]): number => {
+      const text = `${p.title} ${p.category || ''} ${p.extract || ''}`.toLowerCase();
+      let score = 0;
+      for (const kw of keywords) {
+        if (text.includes(kw)) {
+          score += kw.length > 5 ? 3 : 2;
+        }
+      }
+      return score;
+    };
+
+    const findBestPoi = (keywords: string[]): PointOfInterest | null => {
+      let best: PointOfInterest | null = null;
+      let highest = 0;
+      for (const p of list) {
+        if (usedIds.has(p.pageId)) continue;
+        const s = scorePoi(p, keywords);
+        if (s > highest) {
+          highest = s;
+          best = p;
+        }
+      }
+      if (best) {
+        usedIds.add(best.pageId);
+      }
+      return best;
+    };
+
+    const getRemainingOrFallback = (
+      fallbackTitle: string,
+      fallbackCat: string,
+      fallbackDesc: string,
+      index: number
+    ): PointOfInterest => {
+      const unused = list.find((p) => !usedIds.has(p.pageId));
+      if (unused) {
+        usedIds.add(unused.pageId);
+        return unused;
+      }
+      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fallbackTitle + ' ' + city.name)}`;
+      return {
+        pageId: 99000 + index,
+        title: fallbackTitle,
+        lat: city.latitude + (index * 0.005),
+        lon: city.longitude + (index * 0.005),
+        dist: 1000 * (index + 1),
+        distFormatted: `${(1.0 * (index + 1)).toFixed(1)} km`,
+        thumbnail: null,
+        extract: fallbackDesc,
+        url: mapsUrl,
+        mapsUrl,
+        rating: 4.8,
+        reviewsCount: '2.5k avaliações',
+        category: fallbackCat,
+      };
+    };
+
+    // Shift 1: Manhã (09h00)
+    let morningPoi = findBestPoi(FOOD_KEYWORDS);
+    let morningShiftTitle = 'Café da Manhã & Sabores Locais';
+    if (!morningPoi) {
+      morningPoi = findBestPoi(CULTURE_KEYWORDS);
+      if (morningPoi) {
+        morningShiftTitle = 'Manhã Histórica & Cultural';
+      } else {
+        morningPoi = getRemainingOrFallback(
+          `Centro Histórico & Praça Matriz de ${city.name}`,
+          'Centro Histórico',
+          `Caminhada pelas ruas históricas e praça central de ${city.name}, com arquitetura típica e atmosfera acolhedora.`,
+          0
+        );
+        morningShiftTitle = 'Manhã Histórica & Cultural';
+      }
+    }
+
+    // Shift 2: Tarde (14h00)
+    let afternoonPoi = findBestPoi(NATURE_KEYWORDS);
+    let afternoonShiftTitle = 'Tarde no Parque & Natureza';
+    if (!afternoonPoi) {
+      afternoonPoi = findBestPoi(CULTURE_KEYWORDS);
+      if (afternoonPoi) {
+        afternoonShiftTitle = 'Tarde Cultural & Museu';
+      } else {
+        afternoonPoi = getRemainingOrFallback(
+          `Parque Ecológico Municipal de ${city.name}`,
+          'Parque & Ecoturismo',
+          `Ampla área verde para caminhadas sob a sombra das árvores, contemplação e contato direto com a natureza.`,
+          1
+        );
+      }
+    }
+
+    // Shift 3: Pôr do Sol (17h30)
+    let sunsetPoi = findBestPoi(SUNSET_KEYWORDS);
+    let sunsetShiftTitle = 'Pôr do Sol Panorâmico';
+    if (!sunsetPoi) {
+      sunsetPoi = getRemainingOrFallback(
+        `Mirante Panorâmico de ${city.name}`,
+        'Mirante & Paisagem',
+        `Ponto mais alto com vista privilegiada para contemplar a despedida do sol e as cores do horizonte.`,
+        2
+      );
+    }
+
+    // Shift 4: Noite (20h00)
+    let nightPoi = findBestPoi(NIGHT_KEYWORDS);
+    let nightShiftTitle = 'Noite Gastronômica & Arte';
+    if (nightPoi) {
+      const isTheater = nightPoi.title.toLowerCase().includes('teatro');
+      nightShiftTitle = isTheater ? 'Noite Cultural & Teatro' : 'Noite Gastronômica & Sabores';
+    } else {
+      nightPoi = getRemainingOrFallback(
+        `Polo Gastronômico & Noite de ${city.name}`,
+        'Gastronomia & Convivência',
+        `A melhor gastronomia regional e ambiente acolhedor para encerrar o dia em ${city.name}.`,
+        3
+      );
+    }
+
+    const buildUrl = (p: PointOfInterest) =>
+      p.mapsUrl ||
+      p.url ||
+      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.title + ' ' + city.name)}`;
+
+    return [
+      {
+        shift: morningShiftTitle,
+        hour: '09h00',
+        themeColor: '#ca8a04',
+        title: morningPoi.title,
+        extract: morningPoi.extract || '',
+        category: morningPoi.category || 'Atração',
+        distFormatted: morningPoi.distFormatted,
+        thumbnail: morningPoi.thumbnail,
+        mapsUrl: buildUrl(morningPoi),
+      },
+      {
+        shift: afternoonShiftTitle,
+        hour: '14h00',
+        themeColor: '#10b981',
+        title: afternoonPoi.title,
+        extract: afternoonPoi.extract || '',
+        category: afternoonPoi.category || 'Atração',
+        distFormatted: afternoonPoi.distFormatted,
+        thumbnail: afternoonPoi.thumbnail,
+        mapsUrl: buildUrl(afternoonPoi),
+      },
+      {
+        shift: sunsetShiftTitle,
+        hour: '17h30',
+        themeColor: '#f97316',
+        title: sunsetPoi.title,
+        extract: sunsetPoi.extract || '',
+        category: sunsetPoi.category || 'Atração',
+        distFormatted: sunsetPoi.distFormatted,
+        thumbnail: sunsetPoi.thumbnail,
+        mapsUrl: buildUrl(sunsetPoi),
+      },
+      {
+        shift: nightShiftTitle,
+        hour: '20h00',
+        themeColor: '#8b5cf6',
+        title: nightPoi.title,
+        extract: nightPoi.extract || '',
+        category: nightPoi.category || 'Atração',
+        distFormatted: nightPoi.distFormatted,
+        thumbnail: nightPoi.thumbnail,
+        mapsUrl: buildUrl(nightPoi),
+      },
+    ];
+  }, [pois, city]);
+
+  // 2. Fetch AI-Generated Itinerary (Falls back to wikiFallbackStops on failure)
   useEffect(() => {
     let isCancelled = false;
 
     async function loadQuickItinerary() {
       setIsLoading(true);
-      setError(null);
 
       const conditionLabel = weather?.current
         ? ApiService.getWeatherMeta(weather.current.weatherCode).label
@@ -32,14 +258,15 @@ export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({ city, weather,
 
       const cacheKey = `terradata_quick_${city.name}_${weather?.current ? Math.round(weather.current.temperature) : 'std'}`;
 
-      // 1. Check local storage cache
+      // Check client cache first
       if (typeof window !== 'undefined') {
         try {
           const cached = localStorage.getItem(cacheKey);
           if (cached) {
             const parsed = JSON.parse(cached) as AIItinerary;
             if (parsed && Array.isArray(parsed.days) && parsed.days.length > 0) {
-              setItinerary(parsed);
+              setAiItinerary(parsed);
+              onAiStatusChange?.(true);
               setIsLoading(false);
               return;
             }
@@ -49,7 +276,7 @@ export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({ city, weather,
         }
       }
 
-      // 2. Fetch from backend AI service
+      // Call API
       try {
         const res = await fetch('/api/itinerary', {
           method: 'POST',
@@ -72,16 +299,16 @@ export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({ city, weather,
         if (isCancelled) return;
 
         if (!res.ok) {
-          const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-          const msg = typeof data.error === 'string' ? data.error : 'Não foi possível gerar o roteiro.';
-          setError(msg);
+          // AI is offline/unavailable -> Fallback to wiki and notify parent
+          setAiItinerary(null);
+          onAiStatusChange?.(false);
           return;
         }
 
         const data = (await res.json()) as AIItinerary;
         if (!isCancelled && data && Array.isArray(data.days) && data.days.length > 0) {
-          setItinerary(data);
-          // Persist in local cache
+          setAiItinerary(data);
+          onAiStatusChange?.(true);
           try {
             if (typeof window !== 'undefined') {
               localStorage.setItem(cacheKey, JSON.stringify(data));
@@ -89,10 +316,15 @@ export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({ city, weather,
           } catch {
             // Ignore quota errors
           }
+        } else {
+          setAiItinerary(null);
+          onAiStatusChange?.(false);
         }
-      } catch (err) {
+      } catch {
         if (!isCancelled) {
-          setError('Serviço temporariamente indisponível.');
+          // Network failure or AI down -> seamless fallback
+          setAiItinerary(null);
+          onAiStatusChange?.(false);
         }
       } finally {
         if (!isCancelled) {
@@ -106,16 +338,38 @@ export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({ city, weather,
     return () => {
       isCancelled = true;
     };
-  }, [city.name, city.admin1, city.country, weather?.current?.weatherCode, weather?.current?.temperature]);
+  }, [city.name, city.admin1, city.country, weather?.current?.weatherCode, weather?.current?.temperature, onAiStatusChange]);
 
-  const stops: AIItineraryStop[] = itinerary?.days?.[0]?.stops || [];
+  // Determine active stops: AI stops if available, otherwise Wiki Fallback stops
+  const isAiActive = Boolean(aiItinerary && aiItinerary.days?.[0]?.stops?.length);
+
+  const displayStops: DisplayStop[] = useMemo(() => {
+    if (isAiActive && aiItinerary) {
+      const aiStops = aiItinerary.days[0].stops;
+      return aiStops.map((s, idx) => ({
+        shift: s.shift || `Parada ${idx + 1}`,
+        hour: s.time || '09h00',
+        themeColor: s.themeColor || SHIFT_THEME_COLORS[idx % SHIFT_THEME_COLORS.length],
+        title: s.title,
+        extract: s.description,
+        category: s.category,
+        tip: s.tip,
+        distFormatted: undefined,
+        thumbnail: null,
+        mapsUrl:
+          s.mapsUrl ||
+          `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.title + ' ' + city.name)}`,
+      }));
+    }
+    return wikiFallbackStops;
+  }, [isAiActive, aiItinerary, wikiFallbackStops, city.name]);
 
   // Route URL generator for Google Maps
   const handleOpenGoogleMapsRoute = () => {
-    if (stops.length === 0) return;
-    const origin = `${encodeURIComponent(stops[0].title + ' ' + city.name)}`;
-    const destination = `${encodeURIComponent(stops[stops.length - 1].title + ' ' + city.name)}`;
-    const waypoints = stops
+    if (displayStops.length === 0) return;
+    const origin = `${encodeURIComponent(displayStops[0].title + ' ' + city.name)}`;
+    const destination = `${encodeURIComponent(displayStops[displayStops.length - 1].title + ' ' + city.name)}`;
+    const waypoints = displayStops
       .slice(1, -1)
       .map((s) => encodeURIComponent(s.title + ' ' + city.name))
       .join('|');
@@ -126,8 +380,8 @@ export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({ city, weather,
 
   // Route URL generator for Apple Maps
   const handleOpenAppleMapsRoute = () => {
-    if (stops.length === 0) return;
-    const dest = stops[0];
+    if (displayStops.length === 0) return;
+    const dest = displayStops[0];
     const url = `https://maps.apple.com/?q=${encodeURIComponent(dest.title + ' ' + city.name)}`;
     Linking.openURL(url);
   };
@@ -142,14 +396,16 @@ export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({ city, weather,
             <Text style={[styles.cardTitle, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
               Roteiro Rápido: Um Dia em {city.name}
             </Text>
-            <View style={styles.aiTag}>
-              <Sparkles size={10} color="#0071e3" />
-              <Text style={styles.aiTagText}>IA</Text>
-            </View>
+            {isAiActive && (
+              <View style={styles.aiTag}>
+                <Sparkles size={10} color="#0071e3" />
+                <Text style={styles.aiTagText}>IA</Text>
+              </View>
+            )}
           </View>
 
           {/* Action buttons */}
-          {stops.length > 0 && (
+          {displayStops.length > 0 && (
             <View style={styles.actionRow}>
               <TouchableOpacity
                 style={[styles.routeBtn, styles.googleBtn]}
@@ -173,102 +429,101 @@ export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({ city, weather,
           )}
         </View>
 
-        {/* Subtitle with Weather context */}
-        {itinerary?.weatherContext && (
+        {/* Subtitle with Weather context (if AI active) */}
+        {isAiActive && aiItinerary?.weatherContext && (
           <Text style={[styles.weatherSubtitle, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
-            Planejado considerando: {itinerary.weatherContext}.
+            Planejado considerando: {aiItinerary.weatherContext}.
           </Text>
         )}
 
-        {/* Loading state */}
-        {isLoading && (
+        {/* Loading state indicator */}
+        {isLoading && !isAiActive && (
           <View style={styles.loadingBox}>
             <ActivityIndicator size="small" color="#0071e3" />
             <Text style={[styles.loadingText, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
-              A IA está organizando os melhores locais para o clima de hoje...
+              Organizando os melhores pontos para o clima de hoje...
             </Text>
           </View>
         )}
 
-        {/* Error state */}
-        {!isLoading && error && stops.length === 0 && (
-          <View style={[styles.errorBox, isDark ? styles.errorBoxDark : styles.errorBoxLight]}>
-            <AlertCircle size={14} color="#ef4444" />
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        )}
-
-        {/* 4 Timeline Shifts */}
-        {!isLoading && stops.length > 0 && (
+        {/* 4 Timeline Shifts (Works both with AI and Wiki Fallback) */}
+        {displayStops.length > 0 && (
           <View style={styles.timelineList}>
-            {stops.map((stop, idx) => {
-              const themeColor = stop.themeColor || SHIFT_THEME_COLORS[idx % SHIFT_THEME_COLORS.length];
-              const mapsUrl =
-                stop.mapsUrl ||
-                `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(stop.title + ' ' + city.name)}`;
-
-              return (
-                <View key={idx} style={styles.timelineItem}>
-                  {/* Hour & Node */}
-                  <View style={styles.nodeCol}>
-                    <View style={[styles.shiftBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#f0f0f2' }]}>
-                      <Text style={[styles.hourText, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
-                        {stop.time}
-                      </Text>
-                    </View>
-                    {idx < stops.length - 1 && (
-                      <View style={[styles.connectorLine, isDark ? styles.lineDark : styles.lineLight]} />
-                    )}
+            {displayStops.map((stop, idx) => (
+              <View key={idx} style={styles.timelineItem}>
+                {/* Hour & Node */}
+                <View style={styles.nodeCol}>
+                  <View
+                    style={[
+                      styles.shiftBadge,
+                      { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#f0f0f2' },
+                    ]}
+                  >
+                    <Text style={[styles.hourText, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
+                      {stop.hour}
+                    </Text>
                   </View>
-
-                  {/* Stop Card */}
-                  <View style={[styles.stopCard, isDark ? styles.stopCardDark : styles.stopCardLight]}>
-                    <View style={styles.stopContent}>
-                      <View style={styles.stopHeader}>
-                        <View style={styles.shiftTag}>
-                          <Text style={[styles.shiftLabel, { color: themeColor }]}>
-                            {stop.shift || `Parada ${idx + 1}`}
-                          </Text>
-                        </View>
-                        {stop.tip && (
-                          <Text style={[styles.tipTag, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
-                            {stop.tip}
-                          </Text>
-                        )}
-                      </View>
-
-                      <Text
-                        style={[styles.poiTitle, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}
-                        numberOfLines={1}
-                      >
-                        {stop.title}
-                      </Text>
-
-                      <Text
-                        style={[styles.poiExtract, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}
-                        numberOfLines={2}
-                      >
-                        {stop.description}
-                      </Text>
-
-                      <View style={styles.footerRow}>
-                        <View style={styles.categoryPill}>
-                          <MapPin size={10} color="#86868b" />
-                          <Text style={styles.categoryText}>{stop.category}</Text>
-                        </View>
-
-                        <TouchableOpacity
-                          onPress={() => Linking.openURL(mapsUrl)}
-                          activeOpacity={0.65}
-                        >
-                          <Text style={styles.detailsLink}>Ver no mapa →</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  </View>
+                  {idx < displayStops.length - 1 && (
+                    <View style={[styles.connectorLine, isDark ? styles.lineDark : styles.lineLight]} />
+                  )}
                 </View>
-              );
-            })}
+
+                {/* Stop Card */}
+                <View style={[styles.stopCard, isDark ? styles.stopCardDark : styles.stopCardLight]}>
+                  <View style={styles.stopContent}>
+                    <View style={styles.stopHeader}>
+                      <View style={styles.shiftTag}>
+                        <Text style={[styles.shiftLabel, { color: stop.themeColor }]}>
+                          {stop.shift}
+                        </Text>
+                      </View>
+                      {stop.tip ? (
+                        <Text style={[styles.tipTag, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
+                          {stop.tip}
+                        </Text>
+                      ) : stop.distFormatted ? (
+                        <Text style={[styles.distTag, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
+                          {stop.distFormatted}
+                        </Text>
+                      ) : null}
+                    </View>
+
+                    <Text
+                      style={[styles.poiTitle, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}
+                      numberOfLines={1}
+                    >
+                      {stop.title}
+                    </Text>
+
+                    <Text
+                      style={[styles.poiExtract, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}
+                      numberOfLines={2}
+                    >
+                      {stop.extract}
+                    </Text>
+
+                    <View style={styles.footerRow}>
+                      <View style={styles.categoryPill}>
+                        <MapPin size={10} color="#86868b" />
+                        <Text style={styles.categoryText}>{stop.category}</Text>
+                      </View>
+
+                      <TouchableOpacity
+                        onPress={() => Linking.openURL(stop.mapsUrl)}
+                        activeOpacity={0.65}
+                      >
+                        <Text style={styles.detailsLink}>Ver no mapa →</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* Real Wiki photo: rendered ONLY if available in fallback */}
+                  {stop.thumbnail ? (
+                    <LazyImage src={stop.thumbnail} alt={stop.title} style={styles.stopPhoto} />
+                  ) : null}
+                </View>
+              </View>
+            ))}
           </View>
         )}
       </View>
@@ -367,27 +622,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    paddingVertical: 32,
+    paddingVertical: 20,
   },
   loadingText: {
-    fontSize: 13,
-  },
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 12,
-    borderRadius: 12,
-    marginVertical: 12,
-  },
-  errorBoxLight: {
-    backgroundColor: '#fff5f5',
-  },
-  errorBoxDark: {
-    backgroundColor: 'rgba(239,68,68,0.1)',
-  },
-  errorText: {
-    color: '#ef4444',
     fontSize: 12,
   },
   timelineList: {
@@ -464,6 +701,9 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontStyle: 'italic',
   },
+  distTag: {
+    fontSize: 11,
+  },
   poiTitle: {
     fontSize: 14,
     fontWeight: '600',
@@ -491,6 +731,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#0071e3',
     fontWeight: '600',
+  },
+  stopPhoto: {
+    width: 80,
+    height: 74,
+    borderRadius: 12,
   },
   textPrimaryLight: {
     color: '#1d1d1f',
