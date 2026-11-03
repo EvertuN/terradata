@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Map, Layers, Landmark, Compass, CloudRain, Play, Pause, Clock } from 'lucide-react';
+import { Map as MapIcon, Layers, Landmark, Compass, CloudRain, Play, Pause, Clock } from 'lucide-react';
 import { City, PointOfInterest, NearbyCity } from '../types';
 
 interface InteractiveMapProps {
@@ -36,7 +36,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const leafletMapRef = useRef<any>(null);
   const markersLayerRef = useRef<any>(null);
-  const radarTileLayerRef = useRef<any>(null);
+  const radarLayersCacheRef = useRef<Record<string, any>>({});
   const radarHostRef = useRef<string>('https://tilecache.rainviewer.com');
 
   const [filter, setFilter] = useState<'all' | 'pois' | 'nearby'>('all');
@@ -126,44 +126,99 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       }
       leafletMapRef.current = null;
       markersLayerRef.current = null;
-      radarTileLayerRef.current = null;
+      Object.values(radarLayersCacheRef.current).forEach((layer) => {
+        try {
+          if (localMap && localMap.hasLayer(layer)) {
+            localMap.removeLayer(layer);
+          }
+        } catch {}
+      });
+      radarLayersCacheRef.current = {};
     };
   }, []);
 
-  // 3. Add / Update / Remove RainViewer Radar Layer dynamically
+  // 3. Add / Update / Remove RainViewer Radar Layer dynamically with zero-flicker cache & maxNativeZoom: 7
   useEffect(() => {
     if (!isMapReady || !leafletMapRef.current) return;
     const map = leafletMapRef.current;
 
-    const updateRadar = async () => {
-      const L = (await import('leaflet')).default;
-
-      // Always remove previous radar layer first to prevent memory leak & stacking
-      if (radarTileLayerRef.current) {
+    // If radar is NOT active, hide and remove all cached radar layers
+    if (!isRadarActive) {
+      Object.values(radarLayersCacheRef.current).forEach((layer) => {
         try {
-          map.removeLayer(radarTileLayerRef.current);
+          if (map.hasLayer(layer)) {
+            map.removeLayer(layer);
+          }
         } catch (e) {
-          console.warn('Layer removal warning:', e);
+          console.warn('Radar layer cleanup warning:', e);
         }
-        radarTileLayerRef.current = null;
+      });
+      radarLayersCacheRef.current = {};
+      return;
+    }
+
+    if (radarFrames.length === 0) return;
+    const currentFrame = radarFrames[currentFrameIdx];
+    if (!currentFrame) return;
+
+    let isMounted = true;
+
+    const syncRadar = async () => {
+      const L = (await import('leaflet')).default;
+      if (!isMounted || !leafletMapRef.current) return;
+
+      const currentPath = currentFrame.path;
+
+      // 1. Get or create current frame's tile layer
+      let activeLayer = radarLayersCacheRef.current[currentPath];
+      if (!activeLayer) {
+        // Color scheme 2 = Universal Blue (Clean Apple Weather Aesthetic), smooth 1_1
+        const tileUrl = `${radarHostRef.current}${currentPath}/256/{z}/{x}/{y}/2/1_1.png`;
+        activeLayer = L.tileLayer(tileUrl, {
+          tileSize: 256,
+          opacity: 0.72,
+          zIndex: 40,
+          maxNativeZoom: 7, // CRITICAL: RainViewer free API caps native radar at zoom 7. Leaflet upscales smoothly to zoom 19!
+          maxZoom: 19,
+        });
+        radarLayersCacheRef.current[currentPath] = activeLayer;
+        activeLayer.addTo(map);
+      } else {
+        activeLayer.setOpacity(0.72);
+        if (!map.hasLayer(activeLayer)) {
+          activeLayer.addTo(map);
+        }
       }
 
-      if (isRadarActive && radarFrames.length > 0) {
-        const frame = radarFrames[currentFrameIdx];
-        if (frame) {
-          // Color scheme 2 = Universal Blue (Clean Apple Weather Aesthetic), smooth 1_1
-          const tileUrl = `${radarHostRef.current}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`;
-          const layer = L.tileLayer(tileUrl, {
-            opacity: 0.72,
-            zIndex: 40,
-          });
-          layer.addTo(map);
-          radarTileLayerRef.current = layer;
+      // 2. Hide all other frames (kept in memory so subsequent loops have 0ms network latency and zero flickering)
+      Object.entries(radarLayersCacheRef.current).forEach(([path, layer]) => {
+        if (path !== currentPath) {
+          layer.setOpacity(0);
         }
+      });
+
+      // 3. Preload the next frame's tile layer in the background
+      const nextIdx = (currentFrameIdx + 1) % radarFrames.length;
+      const nextFrame = radarFrames[nextIdx];
+      if (nextFrame && !radarLayersCacheRef.current[nextFrame.path]) {
+        const nextTileUrl = `${radarHostRef.current}${nextFrame.path}/256/{z}/{x}/{y}/2/1_1.png`;
+        const nextLayer = L.tileLayer(nextTileUrl, {
+          tileSize: 256,
+          opacity: 0,
+          zIndex: 39,
+          maxNativeZoom: 7,
+          maxZoom: 19,
+        });
+        radarLayersCacheRef.current[nextFrame.path] = nextLayer;
+        nextLayer.addTo(map);
       }
     };
 
-    updateRadar();
+    syncRadar();
+
+    return () => {
+      isMounted = false;
+    };
   }, [isMapReady, isRadarActive, currentFrameIdx, radarFrames]);
 
   // 4. Play / Pause Radar Loop Animation
@@ -327,7 +382,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         {/* Header with Segmented Filter Control & Radar Toggle */}
         <View style={styles.headerRow}>
           <View style={styles.titleWrap}>
-            <Map size={16} color={isDark ? '#64b5f6' : '#0071e3'} />
+            <MapIcon size={16} color={isDark ? '#64b5f6' : '#0071e3'} />
             <Text style={[styles.cardTitle, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
               Mapa da Região
             </Text>
@@ -343,12 +398,22 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
                   ? (isDark ? styles.radarActiveDark : styles.radarActiveLight)
                   : (isDark ? styles.radarInactiveDark : styles.radarInactiveLight),
               ]}
-              onPress={() => {
-                setIsRadarActive((prev) => !prev);
-                if (!isRadarActive) {
+                            onPress={() => {
+                const nextActive = !isRadarActive;
+                setIsRadarActive(nextActive);
+                if (nextActive) {
                   setIsPlayingRadar(true);
+                  // If map is at street level (zoom > 9), smoothly zoom out to regional view (zoom 8)
+                  // so the rain clouds across the territory are immediately visible
+                  if (leafletMapRef.current && leafletMapRef.current.getZoom() > 9) {
+                    leafletMapRef.current.setZoom(8, { animate: true });
+                  }
                 } else {
                   setIsPlayingRadar(false);
+                  // Restore city view (zoom 12)
+                  if (leafletMapRef.current && leafletMapRef.current.getZoom() < 12) {
+                    leafletMapRef.current.setZoom(12, { animate: true });
+                  }
                 }
               }}
               activeOpacity={0.75}
