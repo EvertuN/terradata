@@ -1,8 +1,8 @@
 # TerraData
 
-> Agregador inteligente de dados urbanos, climáticos e culturais em tempo real, construído com **React Native for Web**, **Next.js 14**, **TypeScript** e **Cloudflare Workers (Hono Edge BFF)**, projetado sob as diretrizes do **Apple Human Interface Guidelines (HIG)**.
+> Agregador inteligente de dados urbanos, climáticos e culturais em tempo real, construído com **React Native for Web**, **Next.js 15**, **TypeScript** e **Cloudflare Workers (Hono Edge BFF)**, projetado sob as diretrizes do **Apple Human Interface Guidelines (HIG)**.
 
-[![Next.js](https://img.shields.io/badge/Next.js-14.2-black?logo=next.js&logoColor=white)](https://nextjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-15.5-black?logo=next.js&logoColor=white)](https://nextjs.org/)
 [![React Native Web](https://img.shields.io/badge/React%20Native%20Web-0.19-61DAFB?logo=react&logoColor=black)](https://necolas.github.io/react-native-web/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white)](https://workers.cloudflare.com/)
@@ -107,7 +107,7 @@ Para eliminar a percepção de lentidão causada por consultas SPARQL profundas 
 ## 🛠 Stack Tecnológica
 
 ### Frontend
-- **React 18 & Next.js 14** - Renderização de componentes e exportação estática (`output: 'export'`).
+- **React 18 & Next.js 15** - Renderização de componentes e exportação estática (`output: 'export'`).
 - **React Native for Web 0.19** - Arquitetura de componentes móvel/web unificada com layout Flexbox.
 - **TypeScript 5.6** - Tipagem estática rigorosa de ponta a ponta.
 - **Chart.js 4.4** - Gráficos meteorológicos com curvas Bézier calibradas e eixos sem ruído.
