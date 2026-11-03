@@ -47,6 +47,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const [radarFrames, setRadarFrames] = useState<Array<{ time: number; path: string }>>([]);
   const [currentFrameIdx, setCurrentFrameIdx] = useState(0);
   const [isPlayingRadar, setIsPlayingRadar] = useState(false);
+  const [currentZoom, setCurrentZoom] = useState(12);
 
   const isDark = theme === 'dark';
 
@@ -106,6 +107,9 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
       const markers = L.layerGroup().addTo(map);
 
+      map.on('zoomend', () => {
+        setCurrentZoom(map.getZoom());
+      });
       leafletMapRef.current = map;
       markersLayerRef.current = markers;
       localMap = map;
@@ -403,16 +407,17 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
                 setIsRadarActive(nextActive);
                 if (nextActive) {
                   setIsPlayingRadar(true);
-                  // If map is at street level (zoom > 9), smoothly zoom out to regional view (zoom 8)
-                  // so the rain clouds across the territory are immediately visible
-                  if (leafletMapRef.current && leafletMapRef.current.getZoom() > 9) {
-                    leafletMapRef.current.setZoom(8, { animate: true });
+                  // Zoom to regional view (zoom 6) so cloud and storm fronts across the territory are immediately visible
+                  if (leafletMapRef.current) {
+                    leafletMapRef.current.setZoom(6, { animate: true });
+                    setCurrentZoom(6);
                   }
                 } else {
                   setIsPlayingRadar(false);
                   // Restore city view (zoom 12)
-                  if (leafletMapRef.current && leafletMapRef.current.getZoom() < 12) {
-                    leafletMapRef.current.setZoom(12, { animate: true });
+                  if (leafletMapRef.current) {
+                    leafletMapRef.current.setView([city.latitude, city.longitude], 12, { animate: true });
+                    setCurrentZoom(12);
                   }
                 }
               }}
@@ -530,6 +535,59 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
                 <Text style={[styles.radarTimeText, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}>
                   {formattedFrameTime}
                 </Text>
+              </View>
+
+              {/* View Scope Toggle: Regional (zoom 6) vs Cidade (zoom 12) */}
+              <View style={[styles.radarScopeWrapper, isDark ? styles.radarScopeDark : styles.radarScopeLight]}>
+                <TouchableOpacity
+                  style={[
+                    styles.radarScopeBtn,
+                    currentZoom <= 8 && (isDark ? styles.radarScopeActiveDark : styles.radarScopeActiveLight),
+                  ]}
+                  onPress={() => {
+                    if (leafletMapRef.current) {
+                      leafletMapRef.current.setZoom(6, { animate: true });
+                      setCurrentZoom(6);
+                    }
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.radarScopeText,
+                      currentZoom <= 8
+                        ? (isDark ? styles.textPrimaryDark : styles.textPrimaryLight)
+                        : (isDark ? styles.textSecondaryDark : styles.textSecondaryLight),
+                    ]}
+                  >
+                    Regional
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.radarScopeBtn,
+                    currentZoom > 8 && (isDark ? styles.radarScopeActiveDark : styles.radarScopeActiveLight),
+                  ]}
+                  onPress={() => {
+                    if (leafletMapRef.current) {
+                      leafletMapRef.current.setZoom(12, { animate: true });
+                      setCurrentZoom(12);
+                    }
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.radarScopeText,
+                      currentZoom > 8
+                        ? (isDark ? styles.textPrimaryDark : styles.textPrimaryLight)
+                        : (isDark ? styles.textSecondaryDark : styles.textSecondaryLight),
+                    ]}
+                  >
+                    Cidade
+                  </Text>
+                </TouchableOpacity>
               </View>
 
               {/* Frame Timeline Dots */}
@@ -748,7 +806,34 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '500',
   },
-  textPrimaryLight: {
+  radarScopeWrapper: {
+    flexDirection: 'row',
+    padding: 2,
+    borderRadius: 8,
+  },
+  radarScopeLight: {
+    backgroundColor: 'rgba(0, 0, 0, 0.06)',
+  },
+  radarScopeDark: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  radarScopeBtn: {
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+  },
+  radarScopeActiveLight: {
+    backgroundColor: '#ffffff',
+    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.12)',
+  },
+  radarScopeActiveDark: {
+    backgroundColor: '#0071e3',
+  },
+  radarScopeText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+    textPrimaryLight: {
     color: '#1d1d1f',
   },
   textPrimaryDark: {
