@@ -48,6 +48,38 @@ app.use('*', async (c, next) => {
   c.header('Server-Timing', `edge;dur=${dur}`);
 });
 
+// 2.1 Edge Security Shield: Block Scanners & Hidden/Sensitive Files (.env, .git, etc.)
+app.use('*', async (c, next) => {
+  const url = new URL(c.req.url);
+  const pathname = url.pathname;
+
+  // Explicitly allow legitimate standard paths (e.g. /.well-known/security.txt, ACME challenges)
+  if (pathname === '/.well-known' || pathname.startsWith('/.well-known/')) {
+    return next();
+  }
+
+  // Detect hidden path segments (e.g. /.env, /.git, /sub/.hidden)
+  const segments = pathname.split('/').filter(Boolean);
+  const hasHiddenSegment = segments.some((seg) => seg.startsWith('.') && seg.length > 1);
+
+  // Detect directory traversal attempts
+  const hasTraversal = pathname.includes('..') || pathname.includes('%2e%2e') || pathname.includes('%2E%2E');
+
+  // Detect sensitive file extensions commonly targeted by scanners
+  const isSensitiveFile = /\.(env|git|svn|htaccess|htpasswd|ini|conf|config|bak|backup|old|save|sql|log|swp|DS_Store|yml|yaml|pem|key|crt)$/i.test(pathname);
+
+  if (pathname.startsWith('/.') || hasHiddenSegment || hasTraversal || isSensitiveFile) {
+    return c.text('Not Found', 404, {
+      'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+      'Pragma': 'no-cache',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Robots-Tag': 'noindex, nofollow, noarchive',
+    });
+  }
+
+  await next();
+});
+
 // 3. Health Check
 app.get('/api/health', (c) => {
   return c.json({
