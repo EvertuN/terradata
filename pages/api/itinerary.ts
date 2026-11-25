@@ -105,8 +105,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const options = payloadValidation.options;
 
-  // 6. Fast Quick-Itinerary Cache (2 Hours TTL): avoid hitting OpenRouter if recently generated
-  if (options.mode === 'quick') {
+  // 6. Fast Quick-Itinerary Cache (2 Hours TTL): avoid hitting OpenRouter unless forceRefresh requested
+  if (options.mode === 'quick' && !options.forceRefresh) {
     const cacheKey = getQuickItineraryCacheKey(options.cityName, options.weather?.temperature);
     const cachedItinerary = getQuickItineraryFromMemory(cacheKey);
 
@@ -117,14 +117,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
-  // 7. Generate Itinerary via OpenRouter AI with sanitized preferences and prompt protection
+  // 7. Generate Itinerary via OpenRouter AI with grounded places, sanitized preferences and prompt protection
   try {
     const itinerary = await generateItinerary(apiKey, {
       ...options,
       referer: terradataLink,
     });
 
-    if (options.mode === 'quick') {
+    if (options.mode === 'quick' && !options.forceRefresh) {
       const cacheKey = getQuickItineraryCacheKey(options.cityName, options.weather?.temperature);
       setQuickItineraryToMemory(cacheKey, itinerary);
       res.setHeader('X-TerraData-Cache', 'MISS');

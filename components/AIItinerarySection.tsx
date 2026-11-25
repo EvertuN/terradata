@@ -8,12 +8,13 @@ import {
   StyleSheet,
   Linking,
 } from 'react-native';
-import { Sparkles, MapPin, ExternalLink } from 'lucide-react';
-import { City, WeatherData, AIItinerary, AIItineraryStop, ItineraryDuration, ItineraryTransport } from '../types';
+import { Sparkles, MapPin, RefreshCw } from 'lucide-react';
+import { City, WeatherData, PointOfInterest, AIItinerary, AIItineraryStop, ItineraryDuration, ItineraryTransport } from '../types';
 import { ApiService } from '../services/api';
 
 interface AIItinerarySectionProps {
   city: City;
+  pois?: PointOfInterest[];
   weather?: WeatherData | null;
   theme: 'dark' | 'light';
   isAiAvailable?: boolean;
@@ -22,12 +23,22 @@ interface AIItinerarySectionProps {
 
 const DURATIONS: ItineraryDuration[] = ['Meio dia', '1 dia', '2 dias', '3 dias'];
 const TRANSPORTS: ItineraryTransport[] = ['Carro', 'Moto', 'A pé', 'Bicicleta', 'Transporte público'];
+const STYLE_OPTIONS: string[] = [
+  'Cafés & Padarias',
+  'Restaurantes',
+  'Bares & Noite',
+  'Compras & Lojas',
+  'Parques & Natureza',
+  'Cultura & História',
+  'Em Família',
+];
 
 // Colors per stop index
 const STOP_COLORS = ['#0071e3', '#10b981', '#f59e0b', '#8b5cf6', '#f97316', '#ef4444', '#06b6d4', '#ec4899'];
 
 export const AIItinerarySection: React.FC<AIItinerarySectionProps> = ({
   city,
+  pois = [],
   weather,
   theme,
   isAiAvailable = true,
@@ -36,25 +47,39 @@ export const AIItinerarySection: React.FC<AIItinerarySectionProps> = ({
   const isDark = theme === 'dark';
 
   const [preferences, setPreferences] = useState('');
+  const [selectedStyles, setSelectedStyles] = useState<string[]>([]);
   const [duration, setDuration] = useState<ItineraryDuration>('1 dia');
   const [transport, setTransport] = useState<ItineraryTransport | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState<AIItinerary | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // If AI is offline, do not show the create itinerary section
-  if (!isAiAvailable) {
-    return null;
-  }
-
   const canGenerate = !isGenerating && transport !== null;
 
-  const handleGenerate = useCallback(async () => {
+  const toggleStyle = useCallback((styleName: string) => {
+    setSelectedStyles((prev) => {
+      if (prev.includes(styleName)) {
+        return prev.filter((item) => item !== styleName);
+      }
+      if (prev.length >= 4) {
+        return [...prev.slice(1), styleName];
+      }
+      return [...prev, styleName];
+    });
+  }, []);
+
+  const handleGenerate = useCallback(async (excludePrevious = false) => {
     if (!canGenerate || !transport) return;
+
+    const previousTitles = excludePrevious && result
+      ? result.days.flatMap((d) => d.stops.map((s) => s.title))
+      : [];
 
     setIsGenerating(true);
     setErrorMsg(null);
-    setResult(null);
+    if (!excludePrevious) {
+      setResult(null);
+    }
 
     const conditionLabel = weather?.current
       ? ApiService.getWeatherMeta(weather.current.weatherCode).label
@@ -69,6 +94,9 @@ export const AIItinerarySection: React.FC<AIItinerarySectionProps> = ({
           cityName: city.name,
           admin1: city.admin1,
           country: city.country,
+          lat: city.latitude,
+          lon: city.longitude,
+          currentTime: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
           weather: weather?.current
             ? {
               temperature: Math.round(weather.current.temperature),
@@ -76,7 +104,10 @@ export const AIItinerarySection: React.FC<AIItinerarySectionProps> = ({
               condition: conditionLabel,
             }
             : null,
-          preferences: preferences.slice(0, 100),
+          preferences: preferences.slice(0, 160),
+          styles: selectedStyles,
+          excludeTitles: previousTitles,
+          nearbyPois: pois.slice(0, 15).map((p) => ({ title: p.title, category: p.category })),
           duration,
           transport,
         }),
@@ -107,7 +138,12 @@ export const AIItinerarySection: React.FC<AIItinerarySectionProps> = ({
     } finally {
       setIsGenerating(false);
     }
-  }, [canGenerate, transport, city.name, city.admin1, city.country, weather?.current?.weatherCode, weather?.current?.temperature, preferences, duration, onAiUnavailable]);
+  }, [canGenerate, transport, result, city.name, city.admin1, city.country, city.latitude, city.longitude, pois, weather?.current?.weatherCode, weather?.current?.temperature, preferences, selectedStyles, duration, onAiUnavailable]);
+
+  // If AI is offline, do not show the create itinerary section
+  if (!isAiAvailable) {
+    return null;
+  }
 
   const buildMapsUrl = (stop: AIItineraryStop) =>
     stop.mapsUrl ||
@@ -136,18 +172,56 @@ export const AIItinerarySection: React.FC<AIItinerarySectionProps> = ({
           <View style={[styles.inputWrapper, isDark ? styles.inputWrapperDark : styles.inputWrapperLight]}>
             <TextInput
               style={[styles.textInput, isDark ? styles.textPrimaryDark : styles.textPrimaryLight]}
-              placeholder="Ex.: Quero conhecer os pontos turísticos da região urbana."
+              placeholder="Ex.: Cafés artesanais, almoço típico, livraria e bar descontraído à noite."
               placeholderTextColor={isDark ? '#636366' : '#aeaeb2'}
               value={preferences}
-              onChangeText={(t) => setPreferences(t.slice(0, 100))}
-              maxLength={100}
+              onChangeText={(t) => setPreferences(t.slice(0, 160))}
+              maxLength={160}
               multiline={false}
               returnKeyType="done"
               editable={!isGenerating}
             />
             <Text style={[styles.charCount, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
-              {preferences.length}/100
+              {preferences.length}/160
             </Text>
+          </View>
+        </View>
+
+        {/* Campo 1.5 - Estilos / Foco rápido */}
+        <View style={styles.fieldGroup}>
+          <Text style={[styles.fieldLabel, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
+            Estilos e Estabelecimentos (opcional)
+          </Text>
+          <View style={styles.pillRow}>
+            {STYLE_OPTIONS.map((styleName) => {
+              const active = selectedStyles.includes(styleName);
+              return (
+                <TouchableOpacity
+                  key={styleName}
+                  style={[
+                    styles.pill,
+                    isDark ? styles.pillDark : styles.pillLight,
+                    active && (isDark ? styles.pillActiveDark : styles.pillActiveLight),
+                  ]}
+                  onPress={() => toggleStyle(styleName)}
+                  activeOpacity={0.7}
+                  disabled={isGenerating}
+                >
+                  <Text
+                    style={[
+                      styles.pillText,
+                      active
+                        ? styles.pillTextActive
+                        : isDark
+                          ? styles.textSecondaryDark
+                          : styles.textSecondaryLight,
+                    ]}
+                  >
+                    {styleName}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
 
@@ -235,7 +309,7 @@ export const AIItinerarySection: React.FC<AIItinerarySectionProps> = ({
         {/* Botão Gerar */}
         <TouchableOpacity
           style={[styles.generateBtn, !canGenerate && styles.generateBtnDisabled]}
-          onPress={handleGenerate}
+          onPress={() => handleGenerate(false)}
           activeOpacity={0.8}
           disabled={!canGenerate}
         >
@@ -330,7 +404,9 @@ export const AIItinerarySection: React.FC<AIItinerarySectionProps> = ({
                             <View style={styles.footerRow}>
                               <View style={styles.categoryPill}>
                                 <MapPin size={10} color="#86868b" />
-                                <Text style={styles.categoryText}>{stop.category}</Text>
+                                <Text style={styles.categoryText} numberOfLines={1}>
+                                  {stop.address ? `${stop.category} · ${stop.address}` : stop.category}
+                                </Text>
                               </View>
                               <TouchableOpacity onPress={() => Linking.openURL(mapsUrl)} activeOpacity={0.65}>
                                 <Text style={styles.detailsLink}>Ver no mapa →</Text>
@@ -345,19 +421,33 @@ export const AIItinerarySection: React.FC<AIItinerarySectionProps> = ({
               </View>
             ))}
 
-            {/* Ação - Refazer */}
-            <TouchableOpacity
-              style={[styles.retryBtn, isDark ? styles.retryBtnDark : styles.retryBtnLight]}
-              onPress={() => {
-                setResult(null);
-                setErrorMsg(null);
-              }}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.retryBtnText, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
-                Gerar outro roteiro
-              </Text>
-            </TouchableOpacity>
+            {/* Ações - Variar ou Limpar */}
+            <View style={styles.resultActions}>
+              <TouchableOpacity
+                style={[styles.retryBtn, styles.varyBtn, isDark ? styles.retryBtnDark : styles.retryBtnLight]}
+                onPress={() => handleGenerate(true)}
+                activeOpacity={0.7}
+                disabled={isGenerating}
+              >
+                <RefreshCw size={12} color={isDark ? '#64b5f6' : '#0071e3'} />
+                <Text style={[styles.retryBtnText, styles.varyBtnText]}>
+                  Gerar nova variação
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.retryBtn, isDark ? styles.retryBtnDark : styles.retryBtnLight]}
+                onPress={() => {
+                  setResult(null);
+                  setErrorMsg(null);
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.retryBtnText, isDark ? styles.textSecondaryDark : styles.textSecondaryLight]}>
+                  Limpar
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </View>
@@ -468,18 +558,34 @@ const styles = StyleSheet.create({
   tipTag: { fontSize: 10, fontStyle: 'italic' },
   poiTitle: { fontSize: 14, fontWeight: '600' },
   poiExtract: { fontSize: 12, lineHeight: 16 },
-  footerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
-  categoryPill: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  categoryText: { fontSize: 10, color: '#86868b' },
+  footerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4, gap: 8 },
+  categoryPill: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4, minWidth: 0 },
+  categoryText: { flexShrink: 1, fontSize: 10, color: '#86868b' },
   detailsLink: { fontSize: 11, color: '#0071e3', fontWeight: '600' },
 
+  resultActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    marginTop: 4,
+    flexWrap: 'wrap',
+  },
   retryBtn: {
-    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingVertical: 8,
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
     borderRadius: 12,
     borderWidth: 1,
-    marginTop: 4,
+  },
+  varyBtn: {
+    borderColor: 'rgba(0, 113, 227, 0.25)',
+  },
+  varyBtnText: {
+    color: '#0071e3',
+    fontWeight: '600',
   },
   retryBtnLight: { backgroundColor: '#f5f5f7', borderColor: 'rgba(0,0,0,0.06)' },
   retryBtnDark: { backgroundColor: '#2c2c2e', borderColor: 'rgba(255,255,255,0.08)' },

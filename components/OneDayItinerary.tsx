@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking, ActivityIndicator } from 'react-native';
-import { Compass, ExternalLink, MapPin, Sparkles } from 'lucide-react';
+import { Compass, ExternalLink, MapPin, Sparkles, RefreshCw } from 'lucide-react';
 import { City, WeatherData, PointOfInterest, AIItinerary, AIItineraryStop } from '../types';
 import { ApiService } from '../services/api';
 import { LazyImage } from './LazyImage';
@@ -18,6 +18,7 @@ interface DisplayStop {
   hour: string;
   themeColor: string;
   title: string;
+  address?: string;
   extract: string;
   category: string;
   tip?: string;
@@ -39,6 +40,7 @@ export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({
 
   const [aiItinerary, setAiItinerary] = useState<AIItinerary | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
   // 1. Classical Wiki/SPARQL Smart Matching Algorithm (Guaranteed Fallback)
   const wikiFallbackStops = useMemo<DisplayStop[]>(() => {
@@ -256,7 +258,7 @@ export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({
         ? ApiService.getWeatherMeta(weather.current.weatherCode).label
         : undefined;
 
-      const cacheKey = `terradata_quick_${city.name}_${weather?.current ? Math.round(weather.current.temperature) : 'std'}`;
+      const cacheKey = `terradata_quick_v3_${city.name}_${weather?.current ? Math.round(weather.current.temperature) : 'std'}`;
 
       // Check client cache first
       if (typeof window !== 'undefined') {
@@ -286,6 +288,10 @@ export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({
             cityName: city.name,
             admin1: city.admin1,
             country: city.country,
+            lat: city.latitude,
+            lon: city.longitude,
+            currentTime: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+            nearbyPois: pois.slice(0, 15).map((p) => ({ title: p.title, category: p.category })),
             weather: weather?.current
               ? {
                   temperature: Math.round(weather.current.temperature),
@@ -340,6 +346,63 @@ export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({
     };
   }, [city.name, city.admin1, city.country, weather?.current?.weatherCode, weather?.current?.temperature, onAiStatusChange]);
 
+  // 2b. Manual Refresh / Variant Generator (excludes current stops for fresh recommendations)
+  const handleRefreshVariant = useCallback(async () => {
+    if (isRefreshing || isLoading) return;
+    setIsRefreshing(true);
+
+    const conditionLabel = weather?.current
+      ? ApiService.getWeatherMeta(weather.current.weatherCode).label
+      : undefined;
+
+    const currentTitles = aiItinerary?.days?.[0]?.stops?.map((s) => s.title) || [];
+    const cacheKey = `terradata_quick_v3_${city.name}_${weather?.current ? Math.round(weather.current.temperature) : 'std'}`;
+
+    try {
+      const res = await fetch('/api/itinerary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'quick',
+          forceRefresh: true,
+          excludeTitles: currentTitles,
+          cityName: city.name,
+          admin1: city.admin1,
+          country: city.country,
+          lat: city.latitude,
+          lon: city.longitude,
+          currentTime: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+          nearbyPois: pois.slice(0, 15).map((p) => ({ title: p.title, category: p.category })),
+          weather: weather?.current
+            ? {
+                temperature: Math.round(weather.current.temperature),
+                apparentTemperature: Math.round(weather.current.apparentTemperature),
+                condition: conditionLabel,
+              }
+            : null,
+        }),
+      });
+
+      if (res.ok) {
+        const data = (await res.json()) as AIItinerary;
+        if (data && Array.isArray(data.days) && data.days.length > 0) {
+          setAiItinerary(data);
+          try {
+            if (typeof window !== 'undefined') {
+              localStorage.setItem(cacheKey, JSON.stringify(data));
+            }
+          } catch {
+            // Ignore quota errors
+          }
+        }
+      }
+    } catch {
+      // Keep current itinerary visible on transient errors
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [isRefreshing, isLoading, aiItinerary, city, pois, weather]);
+
   // Determine active stops: AI stops if available, otherwise Wiki Fallback stops
   const isAiActive = Boolean(aiItinerary && aiItinerary.days?.[0]?.stops?.length);
 
@@ -351,6 +414,7 @@ export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({
         hour: s.time || '09h00',
         themeColor: s.themeColor || SHIFT_THEME_COLORS[idx % SHIFT_THEME_COLORS.length],
         title: s.title,
+        address: s.address,
         extract: s.description,
         category: s.category,
         tip: s.tip,
@@ -358,20 +422,25 @@ export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({
         thumbnail: null,
         mapsUrl:
           s.mapsUrl ||
-          `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.title + ' ' + city.name)}`,
+          `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+            s.address ? `${s.title}, ${s.address}, ${city.name}` : `${s.title}, ${city.name}`
+          )}`,
       }));
     }
     return wikiFallbackStops;
   }, [isAiActive, aiItinerary, wikiFallbackStops, city.name]);
 
   // Route URL generator for Google Maps
+  const formatStopQuery = (stop: DisplayStop) =>
+    encodeURIComponent(stop.address ? `${stop.title}, ${stop.address}, ${city.name}` : `${stop.title}, ${city.name}`);
+
   const handleOpenGoogleMapsRoute = () => {
     if (displayStops.length === 0) return;
-    const origin = `${encodeURIComponent(displayStops[0].title + ' ' + city.name)}`;
-    const destination = `${encodeURIComponent(displayStops[displayStops.length - 1].title + ' ' + city.name)}`;
+    const origin = formatStopQuery(displayStops[0]);
+    const destination = formatStopQuery(displayStops[displayStops.length - 1]);
     const waypoints = displayStops
       .slice(1, -1)
-      .map((s) => encodeURIComponent(s.title + ' ' + city.name))
+      .map(formatStopQuery)
       .join('|');
 
     const url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`;
@@ -382,7 +451,7 @@ export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({
   const handleOpenAppleMapsRoute = () => {
     if (displayStops.length === 0) return;
     const dest = displayStops[0];
-    const url = `https://maps.apple.com/?q=${encodeURIComponent(dest.title + ' ' + city.name)}`;
+    const url = `https://maps.apple.com/?q=${formatStopQuery(dest)}`;
     Linking.openURL(url);
   };
 
@@ -407,6 +476,25 @@ export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({
           {/* Action buttons */}
           {displayStops.length > 0 && (
             <View style={styles.actionRow}>
+              {isAiActive && (
+                <TouchableOpacity
+                  style={[styles.routeBtn, isDark ? styles.appleBtnDark : styles.appleBtnLight]}
+                  onPress={handleRefreshVariant}
+                  activeOpacity={0.7}
+                  disabled={isRefreshing}
+                  accessibilityLabel="Gerar nova variação de roteiro"
+                >
+                  {isRefreshing ? (
+                    <ActivityIndicator size="small" color={isDark ? '#64b5f6' : '#0071e3'} />
+                  ) : (
+                    <RefreshCw size={11} color={isDark ? '#64b5f6' : '#0071e3'} />
+                  )}
+                  <Text style={[styles.appleBtnText, { color: isDark ? '#64b5f6' : '#0071e3' }]}>
+                    {isRefreshing ? 'Variando...' : 'Nova opção'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+
               <TouchableOpacity
                 style={[styles.routeBtn, styles.googleBtn]}
                 onPress={handleOpenGoogleMapsRoute}
@@ -505,7 +593,9 @@ export const OneDayItinerary: React.FC<OneDayItineraryProps> = ({
                     <View style={styles.footerRow}>
                       <View style={styles.categoryPill}>
                         <MapPin size={10} color="#86868b" />
-                        <Text style={styles.categoryText}>{stop.category}</Text>
+                        <Text style={styles.categoryText} numberOfLines={1}>
+                          {stop.address ? `${stop.category} · ${stop.address}` : stop.category}
+                        </Text>
                       </View>
 
                       <TouchableOpacity
@@ -717,13 +807,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: 4,
+    gap: 8,
   },
   categoryPill: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    minWidth: 0,
   },
   categoryText: {
+    flexShrink: 1,
     fontSize: 10,
     color: '#86868b',
   },

@@ -628,6 +628,7 @@ export default function HomePage() {
                 {isAiAvailable && (
                   <AIItinerarySection
                     city={currentCity}
+                    pois={pois}
                     weather={weather}
                     theme={theme}
                     isAiAvailable={isAiAvailable}

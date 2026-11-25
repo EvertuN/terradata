@@ -342,8 +342,8 @@ app.post('/api/itinerary', async (c) => {
 
   const options = payloadValidation.options;
 
-  // 5. Fast Quick-Itinerary Cache (2 Hours TTL): avoid hitting OpenRouter if recently generated
-  if (options.mode === 'quick') {
+  // 5. Fast Quick-Itinerary Cache (2 Hours TTL): avoid hitting OpenRouter unless forceRefresh is requested
+  if (options.mode === 'quick' && !options.forceRefresh) {
     // 5a. Check In-Memory Cache first (0ms lookup)
     const memKey = getQuickItineraryCacheKey(options.cityName, options.weather?.temperature);
     const memCached = getQuickItineraryFromMemory(memKey);
@@ -372,14 +372,14 @@ app.post('/api/itinerary', async (c) => {
     }
   }
 
-  // 6. Generate Itinerary via OpenRouter AI with sanitized preferences and prompt protection
+  // 6. Generate Itinerary via OpenRouter AI with grounded places, sanitized preferences, and prompt protection
   try {
     const itinerary = await generateItinerary(apiKey, {
       ...options,
       referer: c.env?.TERRADATA_LINK,
     });
 
-    if (options.mode === 'quick') {
+    if (options.mode === 'quick' && !options.forceRefresh) {
       const memKey = getQuickItineraryCacheKey(options.cityName, options.weather?.temperature);
       setQuickItineraryToMemory(memKey, itinerary);
 

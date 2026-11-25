@@ -72,8 +72,8 @@ export function sanitizePreferences(raw: string): string {
   // 7. Collapse repeated whitespace and trim
   s = s.replace(/\s+/g, ' ').trim();
 
-  // 8. Strict hard limit: maximum 100 characters
-  return s.slice(0, 100);
+  // 8. Strict hard limit: maximum 160 characters
+  return s.slice(0, 160);
 }
 
 /**
@@ -193,6 +193,8 @@ export interface ValidatedItineraryOptions {
   cityName: string;
   admin1?: string;
   country?: string;
+  lat?: number;
+  lon?: number;
   weather?: {
     temperature?: number;
     apparentTemperature?: number;
@@ -201,6 +203,10 @@ export interface ValidatedItineraryOptions {
   currentTime?: string;
   mode: 'quick' | 'custom';
   preferences: string;
+  styles: string[];
+  excludeTitles: string[];
+  nearbyPois: Array<{ title: string; category?: string }>;
+  forceRefresh: boolean;
   duration: ItineraryDuration;
   transport: ItineraryTransport | 'Geral';
 }
@@ -220,6 +226,15 @@ const ALLOWED_TRANSPORTS: (ItineraryTransport | 'Geral')[] = [
   'Bicicleta',
   'Transporte público',
   'Geral',
+];
+const ALLOWED_STYLES = [
+  'Cafés & Padarias',
+  'Restaurantes',
+  'Bares & Noite',
+  'Compras & Lojas',
+  'Parques & Natureza',
+  'Cultura & História',
+  'Em Família',
 ];
 
 /**
@@ -257,11 +272,42 @@ export function validateItineraryPayload(body: unknown): PayloadValidationResult
   const country = typeof data.country === 'string' ? sanitizeLocationName(data.country, 50) : undefined;
   const currentTime = typeof data.currentTime === 'string' ? data.currentTime.slice(0, 30) : undefined;
 
-  // 4. Mode validation
-  const mode = data.mode === 'quick' ? 'quick' : 'custom';
+  const rawLat = typeof data.lat === 'number' && !isNaN(data.lat) ? data.lat : undefined;
+  const rawLon = typeof data.lon === 'number' && !isNaN(data.lon) ? data.lon : undefined;
+  const lat = rawLat !== undefined && rawLat >= -90 && rawLat <= 90 ? rawLat : undefined;
+  const lon = rawLon !== undefined && rawLon >= -180 && rawLon <= 180 ? rawLon : undefined;
 
-  // 5. Preferences (hardened sanitization + 100 char limit)
+  // 4. Mode & variation flags
+  const mode = data.mode === 'quick' ? 'quick' : 'custom';
+  const forceRefresh = Boolean(data.forceRefresh);
+
+  // 5. Preferences (hardened sanitization + 160 char limit) & whitelisted styles
   const preferences = typeof data.preferences === 'string' ? sanitizePreferences(data.preferences) : '';
+  const styles = Array.isArray(data.styles)
+    ? data.styles
+        .filter((s): s is string => typeof s === 'string' && ALLOWED_STYLES.includes(s))
+        .slice(0, 4)
+    : [];
+
+  // 5b. Exclusion list (previous stops to avoid repeating) & nearby POIs context
+  const excludeTitles = Array.isArray(data.excludeTitles)
+    ? data.excludeTitles
+        .filter((t): t is string => typeof t === 'string')
+        .map((t) => sanitizeLocationName(t, 80))
+        .filter((t) => t.length >= 2)
+        .slice(0, 16)
+    : [];
+
+  const nearbyPois = Array.isArray(data.nearbyPois)
+    ? data.nearbyPois
+        .filter((p): p is Record<string, unknown> => Boolean(p && typeof p === 'object'))
+        .map((p) => ({
+          title: typeof p.title === 'string' ? sanitizeLocationName(p.title, 80) : '',
+          category: typeof p.category === 'string' ? sanitizeLocationName(p.category, 40) : undefined,
+        }))
+        .filter((p) => p.title.length >= 2)
+        .slice(0, 15)
+    : [];
 
   // 6. Duration validation
   let duration: ItineraryDuration = '1 dia';
@@ -301,10 +347,16 @@ export function validateItineraryPayload(body: unknown): PayloadValidationResult
       cityName,
       admin1,
       country,
+      lat,
+      lon,
       weather,
       currentTime,
       mode,
       preferences,
+      styles,
+      excludeTitles,
+      nearbyPois,
+      forceRefresh,
       duration,
       transport,
     },
@@ -414,7 +466,7 @@ export function getQuickItineraryCacheKey(cityName: string, temp: number | undef
     .trim()
     .replace(/\s+/g, '_');
   const tempBand = getTemperatureBand(temp);
-  return `quick_itinerary:${normalizedCity}:${tempBand}`;
+  return `quick_itinerary_v3:${normalizedCity}:${tempBand}`;
 }
 
 /**

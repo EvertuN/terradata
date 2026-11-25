@@ -109,6 +109,7 @@ export interface AIItineraryStop {
   shift?: string;
   time: string;
   title: string;
+  address?: string;
   description: string;
   category: string;
   tip?: string;
